@@ -53,14 +53,15 @@ Add the package with Swift Package Manager and link it **only to your Test/Stagi
 The SDK uses a private API to see SwiftUI elements (see [SwiftUI support](#swiftui-support-and-the-private-api)),
 so it must never ship in an App Store build.
 
-**Xcode:** *File → Add Package Dependencies…* → `https://github.com/ekucet/Mister-O.git` → add the
-`MisterO` library to your staging target only.
+**Xcode:** *File → Add Package Dependencies…* → `https://github.com/ekucet/Mister-O.git` → set
+*Dependency Rule* to *Up to Next Major Version* from `0.1.0` → add the `MisterO` library to your
+staging target only.
 
 **Package.swift:**
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/ekucet/Mister-O.git", branch: "main"),
+    .package(url: "https://github.com/ekucet/Mister-O.git", from: "0.1.0"),
 ],
 targets: [
     .target(name: "MyAppStaging", dependencies: [
