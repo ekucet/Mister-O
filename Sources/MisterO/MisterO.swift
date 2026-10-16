@@ -21,13 +21,21 @@ import UIKit
 public enum MisterO {
     /// Kurulu panelin runner'ı; akışı koddan başlatmak için de kullanılabilir.
     public private(set) static var runner: InAppTestRunner?
+    /// Senaryo kataloğu ve toplu koşular.
+    public private(set) static var scenarios: ScenarioStore?
     private static var overlay: OverlayWindow?
 
-    /// - Parameter enablesSwiftUIAccessibility: SwiftUI öğelerini bulabilmek için uygulama erişilebilirliğini
-    ///   açar (private API, ayrıntı `AccessibilityBootstrap`'ta). Yalnızca UIKit ekranlarınız varsa `false` verin.
+    /// - Parameters:
+    ///   - scenarios: Testçinin panelde göreceği senaryo kataloğunun kaynağı.
+    ///   - resetApp: Her senaryodan önce uygulamayı başlangıç durumuna getirir (navigasyonu köke al,
+    ///     oturumu kapat…). Verilmezse senaryolar bir öncekinin bıraktığı ekrandan devam eder.
+    ///   - enablesSwiftUIAccessibility: SwiftUI öğelerini bulabilmek için uygulama erişilebilirliğini
+    ///     açar (private API, ayrıntı `AccessibilityBootstrap`'ta). Yalnızca UIKit ekranlarınız varsa `false` verin.
     public static func install(
         in scene: UIWindowScene,
         initialScript: String = SampleFlow.starter,
+        scenarios feed: ScenarioFeed? = nil,
+        resetApp: (@MainActor () async -> Void)? = nil,
         configuration: InAppTestRunner.Configuration = .default,
         enablesSwiftUIAccessibility: Bool = true
     ) {
@@ -38,6 +46,7 @@ public enum MisterO {
 
         let driver = UIKitDriver()
         let runner = InAppTestRunner(driver: driver, configuration: configuration)
+        let store = ScenarioStore(feed: feed, runner: runner, resetApp: resetApp)
         let panel = PanelModel()
         let window = OverlayWindow(windowScene: scene, panel: panel)
 
@@ -48,22 +57,29 @@ public enum MisterO {
         }
 
         let host = UIHostingController(rootView: TestPanelView(
-            runner: runner, panel: panel, resolver: driver.resolver, initialScript: initialScript
+            runner: runner, scenarios: store, panel: panel, resolver: driver.resolver, initialScript: initialScript
         ))
         host.view.backgroundColor = .clear
         window.rootViewController = host
         window.isHidden = false
 
         self.runner = runner
+        self.scenarios = store
         self.overlay = window
+
+        if feed != nil {
+            Task { await store.refresh() }
+        }
     }
 
     public static func uninstall() {
         AccessibilityBootstrap.uninstall()
+        scenarios?.cancel()
         runner?.cancel()
         overlay?.isHidden = true
         overlay = nil
         runner = nil
+        scenarios = nil
     }
 }
 
@@ -84,12 +100,14 @@ public extension View {
     /// Mister-O test panelini bu görünümün sahnesine kurar (sahne başına bir kez).
     func misterOTestPanel(
         initialScript: String = SampleFlow.starter,
+        scenarios: ScenarioFeed? = nil,
+        resetApp: (@MainActor () async -> Void)? = nil,
         configuration: InAppTestRunner.Configuration = .default,
         enablesSwiftUIAccessibility: Bool = true
     ) -> some View {
         background(SceneHook { scene in
-            MisterO.install(in: scene, initialScript: initialScript, configuration: configuration,
-                            enablesSwiftUIAccessibility: enablesSwiftUIAccessibility)
+            MisterO.install(in: scene, initialScript: initialScript, scenarios: scenarios, resetApp: resetApp,
+                            configuration: configuration, enablesSwiftUIAccessibility: enablesSwiftUIAccessibility)
         })
     }
 }

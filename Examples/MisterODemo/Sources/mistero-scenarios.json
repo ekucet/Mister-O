@@ -1,0 +1,52 @@
+{
+  "scenarios": [
+    {
+      "id": "login-success",
+      "name": "Başarılı giriş",
+      "description": "Geçerli e-posta ve şifreyle giriş yapar, ana sayfayı doğrular.",
+      "tags": ["smoke", "auth"],
+      "steps": [
+        "type: email_field -> tester@mistero.app",
+        "type: password_field -> 123456",
+        "tap: login_button",
+        "assertVisible: welcome_label"
+      ]
+    },
+    {
+      "id": "profile-save",
+      "name": "Profil kaydetme (UIKit)",
+      "description": "Giriş yapıp UIKit ekranında takma ad kaydeder.",
+      "tags": ["smoke", "profil"],
+      "steps": [
+        "type: email_field -> tester@mistero.app",
+        "type: password_field -> 123456",
+        "tap: login_button",
+        "tap: UIKit Ekranı",
+        "type: nickname_field -> Mister O",
+        "tap: Kaydet",
+        "assertVisible: Kaydedildi: Mister O (1)"
+      ]
+    },
+    {
+      "id": "welcome-shows-email",
+      "name": "Hoş geldin mesajında e-posta",
+      "description": "Girişten sonra mesajın kullanıcının e-postasını içerdiğini doğrular.",
+      "tags": ["auth"],
+      "steps": [
+        "type: email_field -> qa@mistero.app",
+        "type: password_field -> 654321",
+        "tap: login_button",
+        "assertVisible: 'Hoş geldin, qa@mistero.app'"
+      ]
+    },
+    {
+      "id": "campaign-banner",
+      "name": "Kampanya bandı (bilinen hata)",
+      "description": "Başarısız bir senaryonun raporda nasıl göründüğünü göstermek için bilerek hata verir.",
+      "tags": ["demo"],
+      "steps": [
+        "assertVisible: campaign_banner"
+      ]
+    }
+  ]
+}

@@ -21,14 +21,17 @@ wait: 1.5
 ```
 
 <p align="center">
-  <img src="docs/images/elements.png" width="250" alt="Elements tab listing on-screen identifiers">
-  <img src="docs/images/passed.png" width="250" alt="A passing run">
-  <img src="docs/images/failed.png" width="250" alt="A failing step with its error message">
+  <img src="docs/images/scenarios.png" width="200" alt="Scenario catalog after a suite run">
+  <img src="docs/images/elements.png" width="200" alt="Elements tab listing on-screen identifiers">
+  <img src="docs/images/passed.png" width="200" alt="A passing run">
+  <img src="docs/images/failed.png" width="200" alt="A failing step with its error message">
 </p>
 
 ## Features
 
 - **Runs on the device.** Testers write and run flows without a computer.
+- **Scenario catalog.** Define test scenarios once in a JSON file on GitHub, on your server or in
+  the app. Testers pick from a list and run one scenario, a tag or all of them with one tap.
 - **SwiftUI and UIKit.** Finds SwiftUI `Button`, `TextField`, `SecureField`, `NavigationLink` and
   UIKit controls by `accessibilityIdentifier`, label or visible text.
 - **Waits for you.** `tap`, `type` and `assertVisible` wait until the element shows up or becomes
@@ -54,14 +57,14 @@ The SDK uses a private API to see SwiftUI elements (see [SwiftUI support](#swift
 so it must never ship in an App Store build.
 
 **Xcode:** *File → Add Package Dependencies…* → `https://github.com/ekucet/Mister-O.git` → set
-*Dependency Rule* to *Up to Next Major Version* from `0.1.0` → add the `MisterO` library to your
+*Dependency Rule* to *Up to Next Major Version* from `0.2.0` → add the `MisterO` library to your
 staging target only.
 
 **Package.swift:**
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/ekucet/Mister-O.git", from: "0.1.0"),
+    .package(url: "https://github.com/ekucet/Mister-O.git", from: "0.2.0"),
 ],
 targets: [
     .target(name: "MyAppStaging", dependencies: [
@@ -115,6 +118,9 @@ Run the app and a test tube bubble appears at the screen edge.
 
 ## Using the panel
 
+If you set up a [scenario catalog](#scenario-catalog), the panel opens on **Senaryolar**
+(Scenarios). The editor below is for quick, one-off flows.
+
 1. **Open:** tap the bubble. You can drag it to either edge.
 2. **Write:** type the flow into the editor. The last flow is saved and comes back on the next launch.
 3. **Find identifiers:** switch to **Öğeler** (Elements) to see what's on the current screen.
@@ -163,6 +169,102 @@ missing or disabled. If it still isn't there, the step fails, for example with
 `Ekranda bulunamadı: "welcome_label" (5.00 sn beklendi)` ("not found on screen, waited 5 s").
 By default the run stops at the first failure and marks the remaining steps as skipped.
 
+## Scenario catalog
+
+Instead of typing flows by hand, testers can run scenarios your QA team defines up front. Put them
+in a JSON file and point the panel at it:
+
+```swift
+.misterOTestPanel(
+    scenarios: .remote(URL(string: "https://raw.githubusercontent.com/acme/qa-flows/main/mistero.json")!),
+    resetApp: { appModel.resetToLogin() }
+)
+```
+
+What the tester does:
+
+1. Opens the panel. The **Senaryolar** tab lists every scenario with its step count and tags.
+2. Optionally picks a tag, for example `#smoke`.
+3. Taps **Tümünü çalıştır** (Run all), or ▶︎ on a single row.
+4. The panel collapses and the bubble shows scenario progress, for example `3/20`.
+5. When the run ends, the panel shows a summary such as `17/20 başarılı · 3 başarısız · 2 dk 14 sn`
+   (17/20 passed · 3 failed · 2 min 14 s). Failed rows show their first error. Tap a row to see its
+   steps, or **Editöre al** to load it into the editor. The copy button copies the whole suite report.
+
+A failing scenario stops at its first failed step, and the suite moves on to the next scenario.
+
+### Catalog format
+
+```json
+{
+  "scenarios": [
+    {
+      "id": "login-success",
+      "name": "Successful login",
+      "description": "Signs in with a valid account and checks the home screen.",
+      "tags": ["smoke", "auth"],
+      "steps": [
+        "type: email_field -> tester@example.com",
+        "type: password_field -> 123456",
+        "tap: login_button",
+        "assertVisible: welcome_label"
+      ]
+    },
+    {
+      "name": "Welcome message",
+      "tags": ["auth"],
+      "flow": "tap: login_button\nassertVisible: 'Welcome, tester@example.com'"
+    }
+  ]
+}
+```
+
+| Field | Required | Meaning |
+|---|---|---|
+| `name` | yes | Shown in the list |
+| `steps` or `flow` | yes | The flow as an array of lines, or as one multi-line string |
+| `id` | no | Stable identifier. Derived from `name` if missing |
+| `description` | no | Short explanation under the name |
+| `tags` | no | Used to filter and to run a subset |
+| `reset` | no | `false` skips `resetApp` before this scenario. Default `true` |
+
+Inside JSON strings, use bare values (`tap: login_button`) or single quotes (`'Welcome, …'`) so you
+don't have to escape `"`. The catalog is checked when it loads. A scenario with a syntax error is
+marked in red, can't be run, and is left out of **Run all**.
+
+### Where the catalog comes from
+
+| Feed | Use it for |
+|---|---|
+| `.remote(url, headers:)` | GitHub raw files, gists, S3, your own server |
+| `.bundled("name")` | `name.json` shipped inside the staging app |
+| `.inline([Scenario])` | Scenarios defined in code |
+| `.custom(name:cacheKey:) { … }` | Anything else, such as Firebase Remote Config or your own API |
+
+The last catalog that loaded successfully from `.remote` is cached on the device. If the source
+can't be reached, testers see the cached list marked **Çevrimdışı** (Offline). The refresh button
+reloads the catalog.
+
+For a private repository, pass a token with `headers: ["Authorization": "Bearer …"]`. Anything in a
+staging build can be extracted, so use a read-only token limited to that one repository.
+
+### Starting each scenario from a known state
+
+Scenarios in a suite run back to back. Without help, scenario 2 starts on whatever screen scenario 1
+left behind. `resetApp` runs before every scenario (unless it has `"reset": false`). It should bring
+the app to the state your scenarios expect, for example by popping navigation to the root and
+signing out:
+
+```swift
+.misterOTestPanel(scenarios: catalog, resetApp: {
+    router.path = []
+    await session.signOut()
+})
+```
+
+After the reset, Mister-O waits 0.6 s for the screen to settle. If you don't provide `resetApp`,
+order the catalog so that each scenario continues from where the previous one ended.
+
 ## Making your app testable
 
 Identifiers make flows stable across copy changes and localizations:
@@ -188,6 +290,8 @@ language changes.
 ```swift
 .misterOTestPanel(
     initialScript: "tap: \"login_button\"",          // shown the first time the panel opens
+    scenarios: .bundled("mistero-scenarios"),        // scenario catalog (see above)
+    resetApp: { router.path = [] },                  // runs before each scenario
     configuration: .init(
         elementTimeout: .seconds(8),                 // wait per element (default 5 s)
         pollInterval: .milliseconds(200),            // how often to look again
@@ -198,8 +302,8 @@ language changes.
 )
 ```
 
-`MisterO.install(in:initialScript:configuration:enablesSwiftUIAccessibility:)` takes the same
-parameters. `MisterO.uninstall()` removes the panel and restores the accessibility setting.
+`MisterO.install(in:initialScript:scenarios:resetApp:configuration:enablesSwiftUIAccessibility:)`
+takes the same parameters. `MisterO.uninstall()` removes the panel and restores the accessibility setting.
 
 ## Running flows from code
 
@@ -215,6 +319,15 @@ if let runner = MisterO.runner {
 }
 ```
 
+The catalog is available as `MisterO.scenarios`:
+
+```swift
+if let catalog = MisterO.scenarios {
+    await catalog.runSuite(catalog.scenarios.filter { $0.tags.contains("smoke") })
+    print(catalog.suiteReportText)
+}
+```
+
 The runner talks to the screen through the `UIDriver` protocol, so you can create
 `InAppTestRunner(driver:configuration:)` with your own driver, for example a fake one in unit tests.
 
@@ -224,7 +337,9 @@ The runner talks to the screen through the `UIDriver` protocol, so you can creat
 MisterOCore  (Foundation only, unit-tested on macOS)
 ├── FlowParser          text → [TestStep]; collects all errors with line numbers
 ├── InAppTestRunner     @MainActor async/await engine: order, waiting, timeouts, cancel, report
-└── UIDriver            protocol the runner uses to talk to the screen
+├── UIDriver            protocol the runner uses to talk to the screen
+├── ScenarioFeed        where the scenario catalog comes from (remote, bundled, inline, custom)
+└── ScenarioStore       loads, caches and checks the catalog; runs one scenario or a suite
 
 MisterO  (UIKit + SwiftUI)
 ├── UIKitDriver         UIDriver = ViewResolver + ActionExecutor
@@ -280,8 +395,9 @@ use the same approach.
   web content inside `WKWebView` can't be reached.
 - **Tested so far:** on the iOS 27 simulator, the demo flow passes end to end with SwiftUI
   `TextField` / `SecureField` / `Button` / `NavigationLink` and UIKit `UITextField` /
-  `UIButton(primaryAction:)`. Physical devices, `UIAlertController` buttons and iOS 16–26 are
-  not tested yet.
+  `UIButton(primaryAction:)`. A four-scenario suite with `resetApp`, a remote catalog and the
+  offline cache were also checked there. Physical devices, `UIAlertController` buttons and
+  iOS 16–26 are not tested yet.
 
 ## Development
 
@@ -297,8 +413,10 @@ Run everything, including the UIKit tests, on a simulator:
 xcodebuild test -scheme MisterO -destination 'platform=iOS Simulator,name=iPhone 17'
 ```
 
-A demo app with a SwiftUI login screen and a UIKit screen lives in `Examples/MisterODemo`.
-Its default flow exercises both:
+A demo app with a SwiftUI login screen and a UIKit screen lives in `Examples/MisterODemo`. It ships
+a four-scenario catalog (`Sources/mistero-scenarios.json`, one of which fails on purpose) and a
+`resetApp` handler. Set the `MISTERO_SCENARIOS_URL` environment variable to load the catalog from a URL
+instead:
 
 ```bash
 open Examples/MisterODemo/MisterODemo.xcodeproj

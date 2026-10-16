@@ -21,14 +21,18 @@ wait: 1.5
 ```
 
 <p align="center">
-  <img src="docs/images/elements.png" width="250" alt="Ekrandaki id'leri listeleyen Öğeler sekmesi">
-  <img src="docs/images/passed.png" width="250" alt="Başarılı bir koşu">
-  <img src="docs/images/failed.png" width="250" alt="Hata mesajıyla başarısız bir adım">
+  <img src="docs/images/scenarios.png" width="200" alt="Suite koşusundan sonra senaryo kataloğu">
+  <img src="docs/images/elements.png" width="200" alt="Ekrandaki id'leri listeleyen Öğeler sekmesi">
+  <img src="docs/images/passed.png" width="200" alt="Başarılı bir koşu">
+  <img src="docs/images/failed.png" width="200" alt="Hata mesajıyla başarısız bir adım">
 </p>
 
 ## Özellikler
 
 - **Cihazda çalışır.** Testçi akışı bilgisayar olmadan yazar ve çalıştırır.
+- **Senaryo kataloğu.** Test senaryolarını bir kez GitHub'da, kendi sunucunuzda ya da uygulamanın
+  içinde bir JSON dosyasında tanımlarsınız. Testçi listeden seçip tek bir senaryoyu, bir etiketi ya
+  da hepsini tek dokunuşla çalıştırır.
 - **SwiftUI ve UIKit.** SwiftUI `Button`, `TextField`, `SecureField`, `NavigationLink` ve UIKit
   kontrollerini `accessibilityIdentifier`, label ya da görünen metinle bulur.
 - **Kendisi bekler.** `tap`, `type` ve `assertVisible` öğe ekrana gelene ya da aktif olana kadar
@@ -51,14 +55,14 @@ SDK, SwiftUI öğelerini görebilmek için private bir API kullanır (bkz. [Swif
 bu yüzden App Store derlemesine kesinlikle girmemelidir.
 
 **Xcode:** *File → Add Package Dependencies…* → `https://github.com/ekucet/Mister-O.git` →
-*Dependency Rule* olarak `0.1.0`'dan itibaren *Up to Next Major Version* seçin → `MisterO`
+*Dependency Rule* olarak `0.2.0`'dan itibaren *Up to Next Major Version* seçin → `MisterO`
 kütüphanesini yalnızca staging hedefine ekleyin.
 
 **Package.swift:**
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/ekucet/Mister-O.git", from: "0.1.0"),
+    .package(url: "https://github.com/ekucet/Mister-O.git", from: "0.2.0"),
 ],
 targets: [
     .target(name: "MyAppStaging", dependencies: [
@@ -112,6 +116,9 @@ Uygulamayı açtığınızda ekranın kenarında bir deney tüpü baloncuğu gö
 
 ## Panelin kullanımı
 
+Bir [senaryo kataloğu](#senaryo-kataloğu) tanımladıysanız panel **Senaryolar** sekmesiyle açılır.
+Aşağıdaki editör, anlık ve tek seferlik akışlar içindir.
+
 1. **Aç:** baloncuğa dokunun. Baloncuğu iki kenardan birine sürükleyebilirsiniz.
 2. **Yaz:** akışı editöre yazın. Son yazılan akış kaydedilir ve uygulama yeniden açılınca geri gelir.
 3. **Id'leri bul:** **Öğeler** sekmesinde o anki ekrandaki öğeler listelenir. Bir satıra dokunup
@@ -161,6 +168,100 @@ yeniden dener. Öğe hâlâ yoksa adım başarısız olur, örneğin
 `Ekranda bulunamadı: "welcome_label" (5.00 sn beklendi)`. Varsayılan olarak koşu ilk hatada durur
 ve kalan adımlar "Atlandı" olarak işaretlenir.
 
+## Senaryo kataloğu
+
+Testçi akışları elle yazmak yerine QA ekibinin önceden tanımladığı senaryoları çalıştırabilir.
+Senaryoları bir JSON dosyasına koyun ve paneli o dosyaya yönlendirin:
+
+```swift
+.misterOTestPanel(
+    scenarios: .remote(URL(string: "https://raw.githubusercontent.com/acme/qa-flows/main/mistero.json")!),
+    resetApp: { appModel.resetToLogin() }
+)
+```
+
+Testçinin yaptığı:
+
+1. Paneli açar. **Senaryolar** sekmesinde tüm senaryolar adım sayıları ve etiketleriyle listelenir.
+2. İsterse bir etiket seçer, örneğin `#smoke`.
+3. **Tümünü çalıştır**'a ya da tek bir satırdaki ▶︎'e basar.
+4. Panel küçülür, baloncukta senaryo ilerlemesi görünür, örneğin `3/20`.
+5. Koşu bitince panel `17/20 başarılı · 3 başarısız · 2 dk 14 sn` gibi bir özet gösterir. Başarısız
+   satırlarda ilk hata yazar. Bir satıra dokununca adımları açılır; **Editöre al** onu editöre
+   yükler. Kopyala butonu tüm suite raporunu kopyalar.
+
+Başarısız bir senaryo ilk hatalı adımda durur, suite bir sonraki senaryoyla devam eder.
+
+### Katalog biçimi
+
+```json
+{
+  "scenarios": [
+    {
+      "id": "login-success",
+      "name": "Başarılı giriş",
+      "description": "Geçerli hesapla giriş yapar ve ana sayfayı doğrular.",
+      "tags": ["smoke", "auth"],
+      "steps": [
+        "type: email_field -> tester@example.com",
+        "type: password_field -> 123456",
+        "tap: login_button",
+        "assertVisible: welcome_label"
+      ]
+    },
+    {
+      "name": "Hoş geldin mesajı",
+      "tags": ["auth"],
+      "flow": "tap: login_button\nassertVisible: 'Hoş geldin, tester@example.com'"
+    }
+  ]
+}
+```
+
+| Alan | Zorunlu | Anlamı |
+|---|---|---|
+| `name` | evet | Listede görünen ad |
+| `steps` ya da `flow` | evet | Akış: satırlardan oluşan bir dizi ya da çok satırlı tek bir metin |
+| `id` | hayır | Kalıcı kimlik. Yoksa `name`'den türetilir |
+| `description` | hayır | Adın altında görünen kısa açıklama |
+| `tags` | hayır | Filtrelemek ve bir alt kümeyi çalıştırmak için |
+| `reset` | hayır | `false` ise bu senaryodan önce `resetApp` çağrılmaz. Varsayılan `true` |
+
+JSON metinlerinin içinde `"` kaçışıyla uğraşmamak için tırnaksız değer (`tap: login_button`) ya da
+tek tırnak (`'Hoş geldin, …'`) kullanın. Katalog yüklenirken kontrol edilir. Yazım hatası olan
+senaryo kırmızıyla işaretlenir, çalıştırılamaz ve **Tümünü çalıştır**'a dahil edilmez.
+
+### Katalog nereden gelir
+
+| Kaynak | Ne için |
+|---|---|
+| `.remote(url, headers:)` | GitHub raw dosyaları, gist'ler, S3, kendi sunucunuz |
+| `.bundled("ad")` | Staging uygulamasının içine konan `ad.json` |
+| `.inline([Scenario])` | Kodda tanımlanan senaryolar |
+| `.custom(name:cacheKey:) { … }` | Diğer her şey: Firebase Remote Config, kendi API'niz… |
+
+`.remote` ile en son başarıyla yüklenen katalog cihazda saklanır. Kaynağa ulaşılamazsa testçi
+önbellekteki listeyi **Çevrimdışı** etiketiyle görür. Yenile butonu kataloğu yeniden yükler.
+
+Özel bir repo için token'ı `headers: ["Authorization": "Bearer …"]` ile verin. Staging derlemesindeki
+her şey dışarı çıkarılabilir; bu yüzden yalnızca o repoyu okuyabilen bir token kullanın.
+
+### Her senaryoyu bilinen bir durumdan başlatmak
+
+Suite'teki senaryolar art arda çalışır. Önlem alınmazsa 2. senaryo, 1. senaryonun bıraktığı ekrandan
+başlar. `resetApp` her senaryodan önce çalışır (senaryoda `"reset": false` yoksa) ve uygulamayı
+senaryoların beklediği duruma getirmelidir; örneğin navigasyonu köke almak ve oturumu kapatmak:
+
+```swift
+.misterOTestPanel(scenarios: catalog, resetApp: {
+    router.path = []
+    await session.signOut()
+})
+```
+
+Reset'ten sonra Mister-O ekranın oturması için 0,6 sn bekler. `resetApp` vermezseniz kataloğu, her
+senaryo bir öncekinin bittiği yerden devam edecek şekilde sıralayın.
+
 ## Uygulamanızı test edilebilir yapmak
 
 Id'ler, metin ya da dil değişse bile akışları sağlam tutar:
@@ -186,6 +287,8 @@ değişince bozulur.
 ```swift
 .misterOTestPanel(
     initialScript: "tap: \"login_button\"",          // panel ilk açıldığında editörde görünür
+    scenarios: .bundled("mistero-scenarios"),        // senaryo kataloğu (yukarıya bakın)
+    resetApp: { router.path = [] },                  // her senaryodan önce çalışır
     configuration: .init(
         elementTimeout: .seconds(8),                 // öğe başına bekleme (varsayılan 5 sn)
         pollInterval: .milliseconds(200),            // ekranın yeniden taranma aralığı
@@ -196,8 +299,8 @@ değişince bozulur.
 )
 ```
 
-`MisterO.install(in:initialScript:configuration:enablesSwiftUIAccessibility:)` aynı parametreleri
-alır. `MisterO.uninstall()` paneli kaldırır ve erişilebilirlik ayarını eski haline döndürür.
+`MisterO.install(in:initialScript:scenarios:resetApp:configuration:enablesSwiftUIAccessibility:)`
+aynı parametreleri alır. `MisterO.uninstall()` paneli kaldırır ve erişilebilirlik ayarını eski haline döndürür.
 
 ## Akışı koddan çalıştırmak
 
@@ -213,6 +316,15 @@ if let runner = MisterO.runner {
 }
 ```
 
+Katalog `MisterO.scenarios` olarak erişilebilir:
+
+```swift
+if let catalog = MisterO.scenarios {
+    await catalog.runSuite(catalog.scenarios.filter { $0.tags.contains("smoke") })
+    print(catalog.suiteReportText)
+}
+```
+
 Runner ekranla `UIDriver` protokolü üzerinden konuşur. Bu sayede `InAppTestRunner(driver:configuration:)`
 ile kendi sürücünüzü (örneğin unit testlerde sahte bir sürücü) kullanabilirsiniz.
 
@@ -222,7 +334,9 @@ ile kendi sürücünüzü (örneğin unit testlerde sahte bir sürücü) kullana
 MisterOCore  (yalnızca Foundation, macOS'ta test edilir)
 ├── FlowParser          metin → [TestStep]; tüm hataları satır numarasıyla toplar
 ├── InAppTestRunner     @MainActor async/await motor: sıra, bekleme, zaman aşımı, iptal, rapor
-└── UIDriver            runner'ın ekranla konuştuğu protokol
+├── UIDriver            runner'ın ekranla konuştuğu protokol
+├── ScenarioFeed        senaryo kataloğunun kaynağı (uzak, paket, kod içi, özel)
+└── ScenarioStore       kataloğu yükler, önbelleğe alır, doğrular; tek senaryo ya da suite koşturur
 
 MisterO  (UIKit + SwiftUI)
 ├── UIKitDriver         UIDriver = ViewResolver + ActionExecutor
@@ -276,7 +390,8 @@ yöntemi kullanır.
   `WKWebView` içindeki web içeriğine erişilemez.
 - **Şimdiye kadar test edilenler:** iOS 27 simülatöründe demo akışı SwiftUI `TextField` /
   `SecureField` / `Button` / `NavigationLink` ve UIKit `UITextField` / `UIButton(primaryAction:)`
-  ile uçtan uca geçiyor. Gerçek cihaz, `UIAlertController` butonları ve iOS 16–26 henüz test edilmedi.
+  ile uçtan uca geçiyor. `resetApp` ile 4 senaryoluk bir suite, uzak katalog ve çevrimdışı önbellek
+  de orada denendi. Gerçek cihaz, `UIAlertController` butonları ve iOS 16–26 henüz test edilmedi.
 
 ## Geliştirme
 
@@ -293,7 +408,9 @@ xcodebuild test -scheme MisterO -destination 'platform=iOS Simulator,name=iPhone
 ```
 
 SwiftUI giriş ekranı ve bir UIKit ekranı içeren demo uygulaması `Examples/MisterODemo` altında.
-Varsayılan akışı ikisini de dener:
+İçinde 4 senaryoluk bir katalog (`Sources/mistero-scenarios.json`; biri bilerek başarısız olur) ve bir
+`resetApp` işleyicisi var. Kataloğu bir URL'den yüklemek için `MISTERO_SCENARIOS_URL` ortam
+değişkenini verin:
 
 ```bash
 open Examples/MisterODemo/MisterODemo.xcodeproj

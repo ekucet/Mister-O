@@ -41,7 +41,7 @@ struct RunLogView: View {
     }
 }
 
-private struct StepRow: View {
+struct StepRow: View {
     let result: StepResult
 
     var body: some View {

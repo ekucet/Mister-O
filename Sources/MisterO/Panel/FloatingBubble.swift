@@ -2,11 +2,14 @@
 import MisterOCore
 import SwiftUI
 
-/// Panel kapalıyken ekranda kalan, sürüklenebilir baloncuk. Koşu sırasında ilerlemeyi,
-/// bitince sonucu renkle gösterir. Dokununca paneli açar.
+/// Panel kapalıyken ekranda kalan, sürüklenebilir baloncuk. Koşu sırasında ilerlemeyi (suite'te
+/// senaryo, tek akışta adım sırası), bitince sonucu renkle gösterir. Dokununca paneli açar.
 struct FloatingBubble: View {
     @ObservedObject var runner: InAppTestRunner
+    @ObservedObject var scenarios: ScenarioStore
     @ObservedObject var panel: PanelModel
+
+    private var isBusy: Bool { runner.isRunning || scenarios.isRunning }
 
     var body: some View {
         // Güvenli alanı yok sayan GeometryReader'ın koordinatları = pencere koordinatları;
@@ -34,11 +37,11 @@ struct FloatingBubble: View {
             Circle()
                 .fill(.regularMaterial)
             Circle()
-                .strokeBorder(runner.state.tint.opacity(0.35), lineWidth: 4)
-            if runner.isRunning {
+                .strokeBorder(tint.opacity(0.35), lineWidth: 4)
+            if isBusy {
                 Circle()
                     .trim(from: 0, to: progress)
-                    .stroke(runner.state.tint, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                    .stroke(tint, style: StrokeStyle(lineWidth: 4, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                     .padding(2)
                     .animation(.easeInOut, value: progress)
@@ -47,7 +50,7 @@ struct FloatingBubble: View {
             } else {
                 Image(systemName: icon)
                     .font(.title3.weight(.semibold))
-                    .foregroundStyle(runner.state.tint)
+                    .foregroundStyle(tint)
             }
         }
         .frame(width: PanelModel.bubbleDiameter, height: PanelModel.bubbleDiameter)
@@ -56,16 +59,27 @@ struct FloatingBubble: View {
         .accessibilityLabel("Mister-O test paneli")
     }
 
+    /// Senaryolar arasındaki reset sırasında runner boşta olsa da baloncuk "çalışıyor" görünür.
+    private var tint: Color {
+        isBusy ? .blue : runner.state.tint
+    }
+
     private var finishedCount: Int {
         runner.results.filter { $0.status != .pending && $0.status != .running }.count
     }
 
     private var progress: CGFloat {
-        runner.results.isEmpty ? 0 : CGFloat(finishedCount) / CGFloat(runner.results.count)
+        if let suite = scenarios.suite, suite.isRunning {
+            return CGFloat(suite.currentIndex ?? 0) / CGFloat(max(suite.scenarios.count, 1))
+        }
+        return runner.results.isEmpty ? 0 : CGFloat(finishedCount) / CGFloat(runner.results.count)
     }
 
     private var stepText: String {
-        "\(min(finishedCount + 1, runner.results.count))/\(runner.results.count)"
+        if let suite = scenarios.suite, suite.isRunning {
+            return "\((suite.currentIndex ?? 0) + 1)/\(suite.scenarios.count)"
+        }
+        return "\(min(finishedCount + 1, runner.results.count))/\(runner.results.count)"
     }
 
     private var icon: String {
