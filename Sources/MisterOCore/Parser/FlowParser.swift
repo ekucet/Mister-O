@@ -51,6 +51,22 @@ public struct FlowParser: Sendable {
         return "\"\(escaped)\""
     }
 
+    /// Değeri olabilecek en sade biçimde yazar: güvenliyse tırnaksız, değilse tek ya da çift tırnaklı.
+    /// JSON katalogda `"tap: login_button"` gibi kaçışsız satırlar üretmek için.
+    public static func literal(_ value: String) -> String {
+        let quoteCharacters: Set<Character> = ["\"", "'", "“", "”", "„", "‘", "’"]
+        let needsQuotes = value.isEmpty
+            || value != value.trimmingCharacters(in: .whitespaces)
+            || value.contains("->") || value.contains("→") || value.contains("#")
+            || value.contains(where: \.isNewline)
+            || value.first.map(quoteCharacters.contains) == true
+        guard needsQuotes else { return value }
+        if !value.contains("'"), !value.contains("\\"), !value.contains(where: \.isNewline) {
+            return "'\(value)'"
+        }
+        return quote(value)
+    }
+
     // MARK: - Satır
 
     private func parseLine(_ rawLine: Substring) throws(LineError) -> TestCommand? {

@@ -10,6 +10,7 @@
 		2D471F9C11F01DF029242386 /* MisterO in Frameworks */ = {isa = PBXBuildFile; productRef = 2FDBB5D976260E18AF5BFA0C /* MisterO */; };
 		2FBBECDDC5A6D1658705F2A0 /* mistero-scenarios.json in Resources */ = {isa = PBXBuildFile; fileRef = 73DDC3951316FA663F499BED /* mistero-scenarios.json */; };
 		4E1E4932173CE02A2BC351F5 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDB1A47AD96C123DE1257E71 /* LoginView.swift */; };
+		7050416F6707182BC571F9CA /* DemoAssistantModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA12466FF10E8E582F0975FB /* DemoAssistantModel.swift */; };
 		822567FE1558DF6A3422AB6D /* MisterODemoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F79CF2D2C142338D33CD471 /* MisterODemoApp.swift */; };
 		A4B88F036A4C85B711551581 /* ProfileViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50343556FE69D987989053B1 /* ProfileViewController.swift */; };
 /* End PBXBuildFile section */
@@ -21,6 +22,7 @@
 		6F79CF2D2C142338D33CD471 /* MisterODemoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MisterODemoApp.swift; sourceTree = "<group>"; };
 		73DDC3951316FA663F499BED /* mistero-scenarios.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "mistero-scenarios.json"; sourceTree = "<group>"; };
 		DDB1A47AD96C123DE1257E71 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
+		EA12466FF10E8E582F0975FB /* DemoAssistantModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DemoAssistantModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -46,6 +48,7 @@
 		421EF48E59B11E42CC490CF7 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
+				EA12466FF10E8E582F0975FB /* DemoAssistantModel.swift */,
 				DDB1A47AD96C123DE1257E71 /* LoginView.swift */,
 				73DDC3951316FA663F499BED /* mistero-scenarios.json */,
 				6F79CF2D2C142338D33CD471 /* MisterODemoApp.swift */,
@@ -146,6 +149,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				7050416F6707182BC571F9CA /* DemoAssistantModel.swift in Sources */,
 				4E1E4932173CE02A2BC351F5 /* LoginView.swift in Sources */,
 				822567FE1558DF6A3422AB6D /* MisterODemoApp.swift in Sources */,
 				A4B88F036A4C85B711551581 /* ProfileViewController.swift in Sources */,
