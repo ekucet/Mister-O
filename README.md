@@ -57,14 +57,14 @@ The SDK uses a private API to see SwiftUI elements (see [SwiftUI support](#swift
 so it must never ship in an App Store build.
 
 **Xcode:** *File → Add Package Dependencies…* → `https://github.com/ekucet/Mister-O.git` → set
-*Dependency Rule* to *Up to Next Major Version* from `0.1.0` → add the `MisterO` library to your
+*Dependency Rule* to *Up to Next Major Version* from `0.2.0` → add the `MisterO` library to your
 staging target only.
 
 **Package.swift:**
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/ekucet/Mister-O.git", from: "0.1.0"),
+    .package(url: "https://github.com/ekucet/Mister-O.git", from: "0.2.0"),
 ],
 targets: [
     .target(name: "MyAppStaging", dependencies: [
