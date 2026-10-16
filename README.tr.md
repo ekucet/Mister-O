@@ -74,6 +74,11 @@ targets: [
 ]
 ```
 
+> **Beta:** [Akış asistanı](#akış-asistanı-yapay-zekâ) `0.3.0-beta.1` sürümünde. Swift Package Manager
+> `from:` ile asla ön sürüm (pre-release) seçmez; bu yüzden açıkça isteyin:
+> `.package(url: "https://github.com/ekucet/Mister-O.git", exact: "0.3.0-beta.1")`.
+> Xcode'da *Dependency Rule* olarak *Exact Version* `0.3.0-beta.1` seçin.
+
 Ardından staging derlemesine bir derleme koşulu ekleyin; örneğin *Build Settings → Active
 Compilation Conditions* içine `STAGING`.
 
@@ -267,8 +272,9 @@ senaryo bir öncekinin bittiği yerden devam edecek şekilde sıralayın.
 
 ## Akış asistanı (yapay zekâ)
 
-> **Prototip.** Panel ve asistan döngüsü test edildi; ancak Apple'ın cihaz içi modeli henüz uçtan uca
-> çalıştırılmadı (bkz. [Durum](#durum)).
+> **Prototip, `0.3.0-beta.1` sürümünde.** Panel ve asistan döngüsü test edildi; ancak Apple'ın cihaz
+> içi modeli henüz uçtan uca çalıştırılmadı (bkz. [Durum](#durum)). Beta'ya nasıl bağımlı olunacağı
+> için [Kurulum](#kurulum) bölümüne bakın.
 
 **Asistan** sekmesi düz cümleyle yazılmış bir hedefi doğrulanmış bir akışa çevirir:
 

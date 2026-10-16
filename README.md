@@ -76,6 +76,11 @@ targets: [
 ]
 ```
 
+> **Beta:** the [flow assistant](#flow-assistant-ai) is in `0.3.0-beta.1`. Swift Package Manager never
+> picks a pre-release from `from:`, so ask for it explicitly:
+> `.package(url: "https://github.com/ekucet/Mister-O.git", exact: "0.3.0-beta.1")`.
+> In Xcode, set *Dependency Rule* to *Exact Version* `0.3.0-beta.1`.
+
 Then add a compilation condition to the staging build, for example `STAGING` in
 *Build Settings → Active Compilation Conditions*.
 
@@ -270,8 +275,9 @@ order the catalog so that each scenario continues from where the previous one en
 
 ## Flow assistant (AI)
 
-> **Prototype.** The panel and the assistant loop are tested, but the Apple on-device model has not
-> yet been run end to end (see [Status](#status)).
+> **Prototype, in `0.3.0-beta.1`.** The panel and the assistant loop are tested, but the Apple
+> on-device model has not yet been run end to end (see [Status](#status)). See
+> [Installation](#installation) for how to depend on the beta.
 
 The **Asistan** tab turns a goal written in plain words into a verified flow:
 
