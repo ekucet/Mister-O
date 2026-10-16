@@ -2,30 +2,37 @@
 import MisterOCore
 import SwiftUI
 
-/// Test paneli: akış editörü, Çalıştır/Durdur, adım logu ve ekran öğeleri listesi.
+/// Test paneli: senaryo kataloğu, akış editörü, Çalıştır/Durdur, adım logu ve ekran öğeleri listesi.
 /// Kapalıyken sürüklenebilir bir baloncuğa dönüşür; koşu sırasında uygulama görünür kalır.
 struct TestPanelView: View {
     private enum Section: Hashable {
+        case scenarios
         case log
         case elements
     }
 
     @ObservedObject var runner: InAppTestRunner
+    @ObservedObject var scenarios: ScenarioStore
     @ObservedObject var panel: PanelModel
     let resolver: ViewResolver
 
     @AppStorage private var script: String
     @FocusState private var isEditorFocused: Bool
-    @State private var section = Section.log
+    @State private var section: Section
     @State private var elements: [InspectedElement] = []
 
-    init(runner: InAppTestRunner, panel: PanelModel, resolver: ViewResolver, initialScript: String) {
+    init(runner: InAppTestRunner, scenarios: ScenarioStore, panel: PanelModel, resolver: ViewResolver,
+         initialScript: String) {
         self.runner = runner
+        self.scenarios = scenarios
         self.panel = panel
         self.resolver = resolver
         // Testçinin son yazdığı akış uygulama yeniden açıldığında geri gelir.
         _script = AppStorage(wrappedValue: initialScript, "MisterO.script")
+        _section = State(initialValue: scenarios.isConfigured ? .scenarios : .log)
     }
+
+    private var isBusy: Bool { runner.isRunning || scenarios.isRunning }
 
     var body: some View {
         ZStack {
@@ -41,16 +48,21 @@ struct TestPanelView: View {
                     .frame(maxHeight: .infinity, alignment: .bottom)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             } else {
-                FloatingBubble(runner: runner, panel: panel)
+                FloatingBubble(runner: runner, scenarios: scenarios, panel: panel)
                     .transition(.scale(scale: 0.6).combined(with: .opacity))
             }
         }
         .animation(.spring(response: 0.35, dampingFraction: 0.86), value: panel.isExpanded)
         .onReceive(runner.$state.removeDuplicates()) { state in
-            if state.isFinished {
-                section = .log
-                panel.expand()
-            }
+            // Suite sırasında her senaryonun sonunda açılmasın; suite bitince açılır.
+            guard state.isFinished, scenarios.suite?.isRunning != true else { return }
+            section = .log
+            panel.expand()
+        }
+        .onReceive(scenarios.$suite.map { $0?.isRunning }.removeDuplicates()) { isRunning in
+            guard isRunning == false else { return }
+            section = .scenarios
+            panel.expand()
         }
     }
 
@@ -60,38 +72,52 @@ struct TestPanelView: View {
         VStack(alignment: .leading, spacing: 10) {
             header
 
-            TextEditor(text: $script)
-                .font(.system(.footnote, design: .monospaced))
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                .scrollContentBackground(.hidden)
-                .padding(6)
-                .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
-                .frame(height: 150)
-                .focused($isEditorFocused)
-                .disabled(runner.isRunning)
-
-            controls
-
             Picker("Bölüm", selection: sectionBinding) {
+                if scenarios.isConfigured {
+                    Text("Senaryolar").tag(Section.scenarios)
+                }
                 Text("Log").tag(Section.log)
                 Text("Öğeler").tag(Section.elements)
             }
             .pickerStyle(.segmented)
 
-            Group {
-                switch section {
-                case .log:
-                    RunLogView(runner: runner)
-                case .elements:
-                    ElementListView(elements: elements, onRefresh: refreshElements, onInsert: appendLine)
-                }
+            if section == .scenarios {
+                ScenarioListView(store: scenarios, isBusy: isBusy, onRun: run, onRunAll: runSuite,
+                                 onEdit: edit, onStop: stop)
+                    .frame(minHeight: 160, maxHeight: 440)
+            } else {
+                editorSection
             }
-            .frame(minHeight: 110, maxHeight: 230)
         }
         .padding(14)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .shadow(color: .black.opacity(0.18), radius: 18, y: 6)
+    }
+
+    @ViewBuilder
+    private var editorSection: some View {
+        TextEditor(text: $script)
+            .font(.system(.footnote, design: .monospaced))
+            .autocorrectionDisabled()
+            .textInputAutocapitalization(.never)
+            .scrollContentBackground(.hidden)
+            .padding(6)
+            .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+            .frame(height: 150)
+            .focused($isEditorFocused)
+            .disabled(isBusy)
+
+        controls
+
+        Group {
+            switch section {
+            case .elements:
+                ElementListView(elements: elements, onRefresh: refreshElements, onInsert: appendLine)
+            case .log, .scenarios:
+                RunLogView(runner: runner)
+            }
+        }
+        .frame(minHeight: 110, maxHeight: 230)
     }
 
     private var header: some View {
@@ -103,11 +129,11 @@ struct TestPanelView: View {
             StatusBadge(state: runner.state)
             Spacer()
             Button {
-                UIPasteboard.general.string = runner.reportText
+                UIPasteboard.general.string = reportText
             } label: {
                 Image(systemName: "doc.on.doc")
             }
-            .disabled(runner.results.isEmpty && runner.parseIssues.isEmpty)
+            .disabled(reportText.isEmpty)
             .accessibilityLabel("Raporu kopyala")
 
             Button(action: collapse) {
@@ -121,10 +147,8 @@ struct TestPanelView: View {
 
     private var controls: some View {
         HStack {
-            if runner.isRunning {
-                Button(role: .destructive) {
-                    runner.cancel()
-                } label: {
+            if isBusy {
+                Button(role: .destructive, action: stop) {
                     Label("Durdur", systemImage: "stop.fill")
                 }
                 .buttonStyle(.borderedProminent)
@@ -156,6 +180,33 @@ struct TestPanelView: View {
         runner.start(script)
     }
 
+    private func run(_ scenario: Scenario) {
+        beginRun()
+        scenarios.start(scenario)
+    }
+
+    private func runSuite(_ list: [Scenario]) {
+        beginRun()
+        scenarios.startSuite(list)
+    }
+
+    private func beginRun() {
+        isEditorFocused = false
+        panel.collapse()
+        panel.prepareForRun()
+    }
+
+    private func stop() {
+        scenarios.cancel()
+        runner.cancel()
+    }
+
+    /// Senaryoyu düzenlemek ya da parça parça denemek için editöre alır.
+    private func edit(_ scenario: Scenario) {
+        script = scenario.script
+        section = .log
+    }
+
     private func collapse() {
         isEditorFocused = false
         panel.collapse()
@@ -177,6 +228,12 @@ struct TestPanelView: View {
             section = newValue
             if newValue == .elements { refreshElements() }
         }
+    }
+
+    /// Senaryolar sekmesinde son suite'in, diğerlerinde son koşunun raporu.
+    private var reportText: String {
+        if section == .scenarios, scenarios.suite != nil { return scenarios.suiteReportText }
+        return runner.results.isEmpty && runner.parseIssues.isEmpty ? "" : runner.reportText
     }
 
     private var progressText: String {

@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		2D471F9C11F01DF029242386 /* MisterO in Frameworks */ = {isa = PBXBuildFile; productRef = 2FDBB5D976260E18AF5BFA0C /* MisterO */; };
+		2FBBECDDC5A6D1658705F2A0 /* mistero-scenarios.json in Resources */ = {isa = PBXBuildFile; fileRef = 73DDC3951316FA663F499BED /* mistero-scenarios.json */; };
 		4E1E4932173CE02A2BC351F5 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDB1A47AD96C123DE1257E71 /* LoginView.swift */; };
 		822567FE1558DF6A3422AB6D /* MisterODemoApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F79CF2D2C142338D33CD471 /* MisterODemoApp.swift */; };
 		A4B88F036A4C85B711551581 /* ProfileViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50343556FE69D987989053B1 /* ProfileViewController.swift */; };
@@ -18,6 +19,7 @@
 		50343556FE69D987989053B1 /* ProfileViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileViewController.swift; sourceTree = "<group>"; };
 		5F19CBA96A11E2594502A23F /* Mister-O */ = {isa = PBXFileReference; lastKnownFileType = folder; name = "Mister-O"; path = ../..; sourceTree = SOURCE_ROOT; };
 		6F79CF2D2C142338D33CD471 /* MisterODemoApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MisterODemoApp.swift; sourceTree = "<group>"; };
+		73DDC3951316FA663F499BED /* mistero-scenarios.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "mistero-scenarios.json"; sourceTree = "<group>"; };
 		DDB1A47AD96C123DE1257E71 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -45,6 +47,7 @@
 			isa = PBXGroup;
 			children = (
 				DDB1A47AD96C123DE1257E71 /* LoginView.swift */,
+				73DDC3951316FA663F499BED /* mistero-scenarios.json */,
 				6F79CF2D2C142338D33CD471 /* MisterODemoApp.swift */,
 				50343556FE69D987989053B1 /* ProfileViewController.swift */,
 			);
@@ -76,6 +79,7 @@
 			buildConfigurationList = 5869258DBD54E35B3F6C519A /* Build configuration list for PBXNativeTarget "MisterODemo" */;
 			buildPhases = (
 				E9A0D09AB161644C13353B26 /* Sources */,
+				81D55FE4773C2B7F245919E0 /* Resources */,
 				18140B5095E5F3C3FB1DB280 /* Frameworks */,
 			);
 			buildRules = (
@@ -125,6 +129,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		81D55FE4773C2B7F245919E0 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				2FBBECDDC5A6D1658705F2A0 /* mistero-scenarios.json in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		E9A0D09AB161644C13353B26 /* Sources */ = {

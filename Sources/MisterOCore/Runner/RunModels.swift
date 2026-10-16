@@ -66,4 +66,13 @@ extension Duration {
         let seconds = Double(parts.seconds) + Double(parts.attoseconds) / 1e18
         return String(format: "%.2f sn", seconds)
     }
+
+    /// Bir dakikanın altında "4.73 sn", üstünde "2 dk 14 sn".
+    public var compactText: String {
+        let parts = components
+        let seconds = Double(parts.seconds) + Double(parts.attoseconds) / 1e18
+        guard seconds >= 60 else { return secondsText }
+        let total = Int(seconds.rounded())
+        return "\(total / 60) dk \(total % 60) sn"
+    }
 }

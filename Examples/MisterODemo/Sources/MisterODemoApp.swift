@@ -5,16 +5,25 @@ import MisterO
 
 @main
 struct MisterODemoApp: App {
+    @StateObject private var model = AppModel()
+
     var body: some Scene {
         WindowGroup {
             RootView()
+                .environmentObject(model)
                 #if MISTERO
-                .misterOTestPanel(initialScript: DemoFlow.login)
+                .misterOTestPanel(
+                    initialScript: DemoFlow.login,
+                    scenarios: DemoFlow.catalog,
+                    // Her senaryo giriş ekranından başlasın.
+                    resetApp: { model.reset() }
+                )
                 #endif
         }
     }
 }
 
+#if MISTERO
 enum DemoFlow {
     static let login = """
     # Demo: SwiftUI giriş + UIKit ekranı
@@ -28,19 +37,37 @@ enum DemoFlow {
     assertVisible: "Kaydedildi: Mister O (1)"
     wait: 1
     """
+
+    /// Paketteki mistero-scenarios.json; `MISTERO_SCENARIOS_URL` verilirse uzaktan yüklenir.
+    static var catalog: ScenarioFeed {
+        if let raw = ProcessInfo.processInfo.environment["MISTERO_SCENARIOS_URL"], let url = URL(string: raw) {
+            return .remote(url)
+        }
+        return .bundled("mistero-scenarios")
+    }
 }
+#endif
 
 enum Route: Hashable {
     case welcome(email: String)
     case uikit
 }
 
+@MainActor
+final class AppModel: ObservableObject {
+    @Published var path: [Route] = []
+
+    func reset() {
+        path = []
+    }
+}
+
 struct RootView: View {
-    @State private var path: [Route] = []
+    @EnvironmentObject private var model: AppModel
 
     var body: some View {
-        NavigationStack(path: $path) {
-            LoginView { email in path.append(.welcome(email: email)) }
+        NavigationStack(path: $model.path) {
+            LoginView { email in model.path.append(.welcome(email: email)) }
                 .navigationDestination(for: Route.self) { route in
                     switch route {
                     case .welcome(let email):
