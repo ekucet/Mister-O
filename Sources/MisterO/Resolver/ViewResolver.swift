@@ -22,6 +22,13 @@ public struct UIElement {
     let zOrder: Int
 
     public var center: CGPoint { CGPoint(x: visibleFrame.midX, y: visibleFrame.midY) }
+
+    var object: NSObject {
+        switch backing {
+        case .view(let view): view
+        case .accessibilityNode(let node, _): node
+        }
+    }
 }
 
 /// Panelin "Öğeler" sekmesinde listelenen, ekrandaki adlandırılmış öğe.
@@ -30,6 +37,11 @@ public struct InspectedElement: Identifiable, Sendable {
     public let identifier: String?
     public let name: String?
     public let kind: String
+    public let isEnabled: Bool
+    /// Metin alanının içeriği (gizli alanlarda yalnızca dolu olduğu bilgisi).
+    public let value: String?
+    /// Metin alanının beklediği veri ("email", "phone", "password"…).
+    public let inputKind: String?
 
     /// Akışa yazılacak en sağlam sorgu: önce identifier, yoksa görünen ad.
     public var suggestedQuery: String { identifier ?? name ?? "" }
@@ -100,8 +112,13 @@ public struct ViewResolver {
             .sorted { ($0.frame.minY.rounded(), $0.frame.minX) < ($1.frame.minY.rounded(), $1.frame.minX) }
             .prefix(limit)
             .enumerated()
-            .map { InspectedElement(id: $0.offset, identifier: $0.element.attributes.identifier,
-                                    name: $0.element.attributes.displayName, kind: $0.element.kind) }
+            .map { item in
+                let attributes = item.element.attributes
+                return InspectedElement(id: item.offset, identifier: attributes.identifier,
+                                        name: attributes.displayName, kind: item.element.kind,
+                                        isEnabled: attributes.isEnabled, value: attributes.value,
+                                        inputKind: attributes.inputKind)
+            }
     }
 
     // MARK: - Tarama

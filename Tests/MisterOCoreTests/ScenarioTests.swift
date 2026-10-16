@@ -31,6 +31,14 @@ struct ScenarioCatalogTests {
         #expect(scenarios[1].script == "tap: Kaydet\nwait: 1")
     }
 
+    @Test func readsAndWritesTheGoal() throws {
+        let json = #"[{ "name": "Giriş", "goal": "Geçerli hesapla giriş yapılabilmeli", "steps": ["tap: a"] }]"#
+        let scenario = try #require(try ScenarioCatalog.decode(Data(json.utf8)).first)
+        #expect(scenario.goal == "Geçerli hesapla giriş yapılabilmeli")
+        #expect(ScenarioCatalog.entry(for: scenario).contains(#""goal": "Geçerli hesapla giriş yapılabilmeli""#))
+        #expect(try ScenarioCatalog.decode(Data(ScenarioCatalog.json(for: [scenario]).utf8)) == [scenario])
+    }
+
     @Test func acceptsTopLevelArrayAndUniquesIDs() throws {
         let json = """
         [

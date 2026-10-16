@@ -7,6 +7,8 @@ import Foundation
 ///     type: "email_field" -> "test@example.com"
 ///     wait: 1.5
 ///     assertVisible: "welcome_label"
+///     assertNotVisible: "error_label"
+///     assertDisabled: "login_button"
 ///
 /// - Boş satırlar ve `#` ile başlayan satırlar atlanır; satır sonu yorumu (` # ...`) desteklenir.
 /// - YAML listesi gibi `- tap: ...` yazımı kabul edilir; komut adları büyük/küçük harf duyarsızdır.
@@ -107,8 +109,18 @@ public struct FlowParser: Sendable {
         case "assertvisible":
             command = .assertVisible(ElementSelector(try scanner.value()))
 
+        case "assertnotvisible":
+            command = .assertNotVisible(ElementSelector(try scanner.value()))
+
+        case "assertenabled":
+            command = .assertEnabled(ElementSelector(try scanner.value()))
+
+        case "assertdisabled":
+            command = .assertDisabled(ElementSelector(try scanner.value()))
+
         default:
-            throw LineError("Bilinmeyen komut '\(keyword)'. Desteklenenler → tap, type, wait, assertVisible")
+            throw LineError("Bilinmeyen komut '\(keyword)'. Desteklenenler → tap, type, wait, assertVisible, "
+                            + "assertNotVisible, assertEnabled, assertDisabled")
         }
 
         try scanner.expectEnd()

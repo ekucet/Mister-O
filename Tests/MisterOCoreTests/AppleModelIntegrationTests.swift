@@ -3,8 +3,8 @@ import FoundationModels
 import Testing
 @testable import MisterOCore
 
-/// Gerçek cihaz içi modelle çalışır; model hazır değilse (Apple Intelligence kapalı, indiriliyor,
-/// desteklenmeyen cihaz) ya da simülatördeyse atlanır. Gerçek cihazda ya da modeli hazır bir Mac'te koşar.
+/// Şema ve cevap ayrıştırma testleri model gerektirmez. Gerçek modeli çağıranlar model hazır değilse
+/// (Apple Intelligence kapalı, indiriliyor, desteklenmeyen cihaz) ya da simülatördeyse atlanır.
 struct AppleModelIntegrationTests {
     static var modelIsAvailable: Bool {
         #if targetEnvironment(simulator)
@@ -20,43 +20,55 @@ struct AppleModelIntegrationTests {
         ScreenElement(query: "Giriş", identifier: nil, name: "Giriş", kind: "Header · AX"),
         ScreenElement(query: "email_field", identifier: "email_field", name: "E-posta", kind: "UIKitTextField"),
         ScreenElement(query: "password_field", identifier: "password_field", name: "Şifre", kind: "UIKitTextField"),
-        ScreenElement(query: "login_button", identifier: "login_button", name: "Giriş Yap", kind: "Button · AX"),
+        ScreenElement(query: "login_button", identifier: "login_button", name: "Giriş Yap", kind: "Button · AX",
+                      isEnabled: false),
     ]
 
-    /// Model gerektirmez: şema hataları (ör. aynı adlı iki tip) cihaza gitmeden yakalanır.
-    @Test func decisionSchemaBuilds() throws {
+    @Test func schemasBuild() throws {
         guard #available(iOS 26.0, macOS 26.0, *) else { return }
-        let context = AssistantContext(goal: "x", answers: [], steps: [], lastIssue: nil, screen: Self.loginScreen)
-        _ = try AppleFlowAssistantModel.schema(targets: context.targets)
-        _ = try AppleFlowAssistantModel.schema(targets: ["-"])
+        _ = try AppleFlowAssistantModel.planSchema()
+        _ = try AppleFlowAssistantModel.decisionSchema(targets: ["-", "email_field", "login_button"])
+        _ = try AppleFlowAssistantModel.decisionSchema(targets: ["-"])
     }
 
-    @Test(.enabled(if: modelIsAvailable))
-    func asksForDataOrTypesIntoAField() async throws {
+    @Test func decodesPlanAndDecision() throws {
         guard #available(iOS 26.0, macOS 26.0, *) else { return }
-        let context = AssistantContext(goal: "Giriş yapılabilmeli ve ana sayfa açılmalı", answers: [], steps: [],
-                                       lastIssue: nil, screen: Self.loginScreen)
-        let decision = try await AppleFlowAssistantModel().nextDecision(for: context)
+        let plan = try AppleFlowAssistantModel.decodePlan(GeneratedContent(json: """
+        {"checks": [{"title": "Boş form", "expectation": "Buton pasif", "leavesScreen": false},
+                    {"title": "Giriş", "expectation": "Ana sayfa", "leavesScreen": true}]}
+        """))
+        #expect(plan == [PlannedCheck(title: "Boş form", expectation: "Buton pasif"),
+                         PlannedCheck(title: "Giriş", expectation: "Ana sayfa", leavesScreen: true)])
 
-        #expect([.ask, .type].contains(decision.action), "\(decision)")
-        if decision.action == .type {
-            #expect(["email_field", "password_field"].contains(decision.target ?? ""), "\(decision)")
+        let decision = try AppleFlowAssistantModel.decodeDecision(GeneratedContent(json: """
+        {"message": "Butonu kontrol ediyorum.", "action": "assertDisabled", "target": "login_button", "text": ""}
+        """))
+        #expect(decision == AssistantDecision(action: .assertDisabled, target: "login_button", text: "",
+                                              message: "Butonu kontrol ediyorum."))
+
+        #expect(throws: AssistantModelError.self) {
+            try AppleFlowAssistantModel.decodeDecision(GeneratedContent(json: """
+            {"message": "", "action": "dance", "target": "-", "text": ""}
+            """))
         }
     }
 
     @Test(.enabled(if: modelIsAvailable))
-    func usesTheTesterAnswerAndOnlyListedTargets() async throws {
+    func plansChecksForALoginScreen() async throws {
+        guard #available(iOS 26.0, macOS 26.0, *) else { return }
+        let plan = try await AppleFlowAssistantModel().plan(for: PlanContext(focus: nil, screen: Self.loginScreen))
+        #expect((1...PlanContext.maxChecks).contains(plan.count), "\(plan)")
+    }
+
+    @Test(.enabled(if: modelIsAvailable))
+    func picksOnlyListedTargets() async throws {
         guard #available(iOS 26.0, macOS 26.0, *) else { return }
         let context = AssistantContext(
-            goal: "Giriş yapılabilmeli",
-            answers: [.init(question: "Hangi hesapla?", answer: "qa@firma.com, şifre 123456")],
-            steps: ["type: email_field -> qa@firma.com", "type: password_field -> 123456"],
-            lastIssue: nil, screen: Self.loginScreen
+            check: PlannedCheck(title: "Boş formla giriş yapılamamalı", expectation: "Giriş Yap pasif kalmalı"),
+            answers: [], steps: [], lastIssue: nil, screen: Self.loginScreen
         )
         let decision = try await AppleFlowAssistantModel().nextDecision(for: context)
-
         #expect(context.targets.contains(decision.target ?? "-"), "\(decision)")
-        #expect(decision.action == .tap && decision.target == "login_button", "\(decision)")
     }
 }
 #endif
