@@ -2,21 +2,25 @@
 import MisterOCore
 import SwiftUI
 
-/// Katalogdaki senaryolar: etikete göre filtre, tek tek ya da toplu çalıştırma, son sonuçlar.
+/// Katalogdaki senaryolar ve asistandan kaydedilen taslaklar: etikete göre filtre, tek tek ya da toplu
+/// çalıştırma, son sonuçlar, taslakları QA ekibiyle paylaşma.
 struct ScenarioListView: View {
     @ObservedObject var store: ScenarioStore
     let isBusy: Bool
+    /// Asistan kullanılabiliyorsa düşen senaryolarda "Asistanla onar" görünür.
+    let canRepair: Bool
     let onRun: (Scenario) -> Void
     let onRunAll: ([Scenario]) -> Void
     let onEdit: (Scenario) -> Void
+    let onRepair: (Scenario) -> Void
     let onStop: () -> Void
 
     @State private var selectedTag: String?
     @State private var expandedID: Scenario.ID?
 
     private var visible: [Scenario] {
-        guard let selectedTag else { return store.scenarios }
-        return store.scenarios.filter { $0.tags.contains(selectedTag) }
+        guard let selectedTag else { return store.allScenarios }
+        return store.allScenarios.filter { $0.tags.contains(selectedTag) }
     }
 
     private var runnable: [Scenario] {
@@ -25,7 +29,12 @@ struct ScenarioListView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            catalogStatus
+            if store.isConfigured {
+                catalogStatus
+            }
+            if !store.drafts.isEmpty {
+                draftsBar
+            }
 
             if let suite = store.suite {
                 SuiteSummaryView(suite: suite, runs: store.runs)
@@ -39,17 +48,26 @@ struct ScenarioListView: View {
 
             ScrollView {
                 LazyVStack(spacing: 6) {
+                    if store.allScenarios.isEmpty {
+                        Text("Henüz senaryo yok. Asistan sekmesinde bir ekranı test edip geçen kontrolleri taslak olarak kaydedebilirsiniz.")
+                            .font(.footnote)
+                            .foregroundStyle(Color.gray)
+                    }
                     ForEach(visible) { scenario in
                         ScenarioRow(
                             scenario: scenario,
+                            isDraft: store.isDraft(scenario),
                             validation: store.validation(for: scenario),
                             run: store.runs[scenario.id],
                             isActive: store.activeScenarioID == scenario.id,
                             isExpanded: expandedID == scenario.id,
                             canRun: !isBusy,
+                            canRepair: canRepair && !isBusy,
                             onToggle: { expandedID = expandedID == scenario.id ? nil : scenario.id },
                             onRun: { onRun(scenario) },
-                            onEdit: { onEdit(scenario) }
+                            onEdit: { onEdit(scenario) },
+                            onRepair: { onRepair(scenario) },
+                            onDelete: { store.deleteDraft(scenario.id) }
                         )
                     }
                 }
@@ -89,6 +107,19 @@ struct ScenarioListView: View {
             }
             .disabled(store.status == .loading || isBusy)
             .accessibilityLabel("Kataloğu yenile")
+        }
+    }
+
+    private var draftsBar: some View {
+        HStack(spacing: 6) {
+            Label("\(store.drafts.count) taslak (asistandan)", systemImage: "tray.full")
+                .font(.caption)
+                .foregroundStyle(.indigo)
+            Spacer()
+            ShareLink(item: store.draftsCatalogJSON) {
+                Label("Taslakları paylaş", systemImage: "square.and.arrow.up")
+                    .font(.caption)
+            }
         }
     }
 
@@ -181,14 +212,18 @@ private struct SuiteSummaryView: View {
 
 private struct ScenarioRow: View {
     let scenario: Scenario
+    let isDraft: Bool
     let validation: ScenarioStore.Validation
     let run: ScenarioStore.Run?
     let isActive: Bool
     let isExpanded: Bool
     let canRun: Bool
+    let canRepair: Bool
     let onToggle: () -> Void
     let onRun: () -> Void
     let onEdit: () -> Void
+    let onRepair: () -> Void
+    let onDelete: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -196,8 +231,18 @@ private struct ScenarioRow: View {
                 statusIcon
                     .frame(width: 18)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(scenario.name)
-                        .font(.subheadline.weight(.semibold))
+                    HStack(spacing: 6) {
+                        Text(scenario.name)
+                            .font(.subheadline.weight(.semibold))
+                        if isDraft {
+                            Text("Taslak")
+                                .font(.caption2.weight(.semibold))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
+                                .foregroundStyle(.indigo)
+                                .background(Color.indigo.opacity(0.15), in: Capsule())
+                        }
+                    }
                     if let summary = scenario.summary {
                         Text(summary)
                             .font(.caption)
@@ -259,10 +304,28 @@ private struct ScenarioRow: View {
                     StepRow(result: result)
                 }
             }
-            Button(action: onEdit) {
-                Label("Editöre al", systemImage: "square.and.pencil")
-                    .font(.caption)
+            if canRepair, let run, run.state != .passed, run.state != .cancelled {
+                Button(action: onRepair) {
+                    Label("Asistanla onar", systemImage: "wrench.and.screwdriver")
+                }
+                .font(.caption)
+                .buttonStyle(.borderedProminent)
+                .tint(.indigo)
             }
+            HStack(spacing: 6) {
+                Button(action: onEdit) {
+                    Label("Editöre al", systemImage: "square.and.pencil")
+                }
+                if isDraft {
+                    ShareLink(item: ScenarioCatalog.entry(for: scenario)) {
+                        Label("Paylaş", systemImage: "square.and.arrow.up")
+                    }
+                    Button(role: .destructive, action: onDelete) {
+                        Label("Sil", systemImage: "trash")
+                    }
+                }
+            }
+            .font(.caption)
             .buttonStyle(.bordered)
         }
         .padding(.leading, 26)

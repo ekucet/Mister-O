@@ -24,6 +24,10 @@ final class FakeDriver: UIDriver {
     func isVisible(_ selector: ElementSelector) -> Bool {
         visible.contains(selector.query)
     }
+
+    func isEnabled(_ selector: ElementSelector) -> Bool? {
+        visible.contains(selector.query) ? !disabled.contains(selector.query) : nil
+    }
 }
 
 @MainActor
@@ -124,6 +128,31 @@ struct InAppTestRunnerTests {
 
         #expect(await runner.run("tap: a\ntap: b") == .failed)
         #expect(runner.results.map(\.status.symbol) == ["✗", "✓"])
+    }
+
+    @Test func stateAssertionsWaitForTheExpectedState() async {
+        let driver = FakeDriver()
+        driver.visible = ["error", "save", "submit"]
+        driver.disabled = ["submit"]
+        let runner = InAppTestRunner(driver: driver, configuration: .init(
+            elementTimeout: .seconds(2), pollInterval: .milliseconds(10), delayBetweenSteps: .zero
+        ))
+        Task {
+            try? await Task.sleep(for: .milliseconds(60))
+            driver.visible.remove("error")
+        }
+
+        #expect(await runner.run("""
+        assertNotVisible: error
+        assertEnabled: save
+        assertDisabled: submit
+        """) == .passed)
+
+        let quick = InAppTestRunner(driver: driver, configuration: fast)
+        #expect(await quick.run("assertDisabled: save") == .failed)
+        #expect(quick.reportText.contains("Öğe aktif, pasif olması bekleniyordu: \"save\""))
+        #expect(await quick.run("assertEnabled: missing") == .failed)
+        #expect(await quick.run("assertNotVisible: save") == .failed)
     }
 
     @Test func invalidScriptNeverTouchesTheDriver() async {

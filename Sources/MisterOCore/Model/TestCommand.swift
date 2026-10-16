@@ -26,6 +26,12 @@ public enum TestCommand: Equatable, Sendable {
     case wait(seconds: Double)
     /// `assertVisible: "welcome_label"`
     case assertVisible(ElementSelector)
+    /// `assertNotVisible: "error_label"`
+    case assertNotVisible(ElementSelector)
+    /// `assertEnabled: "login_button"`
+    case assertEnabled(ElementSelector)
+    /// `assertDisabled: "login_button"`
+    case assertDisabled(ElementSelector)
 }
 
 /// Parser çıktısı: komut + testçiye geri gösterilecek kaynak satır bilgisi.

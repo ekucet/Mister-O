@@ -7,9 +7,15 @@ import SwiftUI
 struct FloatingBubble: View {
     @ObservedObject var runner: InAppTestRunner
     @ObservedObject var scenarios: ScenarioStore
+    @ObservedObject var assistant: FlowAssistant
     @ObservedObject var panel: PanelModel
 
-    private var isBusy: Bool { runner.isRunning || scenarios.isRunning }
+    private var isBusy: Bool { runner.isRunning || scenarios.isRunning || assistant.isWorking }
+
+    /// Asistanın bitirdiği kontrol sayısı / toplam.
+    private var assistantProgress: (done: Int, total: Int) {
+        (assistant.checks.filter(\.status.isFinished).count, assistant.checks.count)
+    }
 
     var body: some View {
         // Güvenli alanı yok sayan GeometryReader'ın koordinatları = pencere koordinatları;
@@ -61,7 +67,8 @@ struct FloatingBubble: View {
 
     /// Senaryolar arasındaki reset sırasında runner boşta olsa da baloncuk "çalışıyor" görünür.
     private var tint: Color {
-        isBusy ? .blue : runner.state.tint
+        if assistant.isWorking { return .indigo }
+        return isBusy ? .blue : runner.state.tint
     }
 
     private var finishedCount: Int {
@@ -69,6 +76,10 @@ struct FloatingBubble: View {
     }
 
     private var progress: CGFloat {
+        if assistant.isWorking {
+            let (done, total) = assistantProgress
+            return total == 0 ? 0.05 : CGFloat(done) / CGFloat(total)
+        }
         if let suite = scenarios.suite, suite.isRunning {
             return CGFloat(suite.currentIndex ?? 0) / CGFloat(max(suite.scenarios.count, 1))
         }
@@ -76,6 +87,10 @@ struct FloatingBubble: View {
     }
 
     private var stepText: String {
+        if assistant.isWorking {
+            let (done, total) = assistantProgress
+            return total == 0 ? "AI" : "\(min(done + 1, total))/\(total)"
+        }
         if let suite = scenarios.suite, suite.isRunning {
             return "\((suite.currentIndex ?? 0) + 1)/\(suite.scenarios.count)"
         }

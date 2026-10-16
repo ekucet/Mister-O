@@ -182,6 +182,23 @@ public final class InAppTestRunner: ObservableObject {
             try await retrying {
                 guard driver.isVisible(selector) else { throw DriverError.elementNotFound(selector) }
             }
+
+        case .assertNotVisible(let selector):
+            try await retrying {
+                guard !driver.isVisible(selector) else { throw DriverError.stillVisible(selector) }
+            }
+
+        case .assertEnabled(let selector):
+            try await retrying {
+                guard let enabled = driver.isEnabled(selector) else { throw DriverError.elementNotFound(selector) }
+                guard enabled else { throw DriverError.elementDisabled(selector) }
+            }
+
+        case .assertDisabled(let selector):
+            try await retrying {
+                guard let enabled = driver.isEnabled(selector) else { throw DriverError.elementNotFound(selector) }
+                guard !enabled else { throw DriverError.elementEnabled(selector) }
+            }
         }
     }
 

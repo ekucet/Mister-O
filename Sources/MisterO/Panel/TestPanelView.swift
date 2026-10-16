@@ -2,12 +2,17 @@
 import MisterOCore
 import SwiftUI
 
-/// Test paneli: senaryo kataloğu, asistan, akış editörü, Çalıştır/Durdur, adım logu ve ekran öğeleri listesi.
-/// Kapalıyken sürüklenebilir bir baloncuğa dönüşür; koşu sırasında uygulama görünür kalır.
+/// Test paneli: Asistan, Senaryolar ve Gelişmiş (akış editörü, adım logu, ekran öğeleri).
+/// Testçinin günlük işi ilk iki sekmede; DSL'i görmesi gerekmez. Kapalıyken sürüklenebilir bir
+/// baloncuğa dönüşür; koşu sırasında uygulama görünür kalır.
 struct TestPanelView: View {
     private enum Section: Hashable {
-        case scenarios
         case assistant
+        case scenarios
+        case advanced
+    }
+
+    private enum AdvancedPane: Hashable {
         case log
         case elements
     }
@@ -15,27 +20,31 @@ struct TestPanelView: View {
     @ObservedObject var runner: InAppTestRunner
     @ObservedObject var scenarios: ScenarioStore
     @ObservedObject var panel: PanelModel
-    let assistant: FlowAssistant?
+    @ObservedObject var assistant: FlowAssistant
+    let issueReporter: (any IssueReporter)?
     let resolver: ViewResolver
 
     @AppStorage private var script: String
     @FocusState private var isEditorFocused: Bool
     @State private var section: Section
+    @State private var advancedPane = AdvancedPane.log
     @State private var elements: [InspectedElement] = []
 
-    init(runner: InAppTestRunner, scenarios: ScenarioStore, panel: PanelModel, assistant: FlowAssistant?,
-         resolver: ViewResolver, initialScript: String) {
+    init(runner: InAppTestRunner, scenarios: ScenarioStore, panel: PanelModel, assistant: FlowAssistant,
+         issueReporter: (any IssueReporter)?, resolver: ViewResolver, initialScript: String) {
         self.runner = runner
         self.scenarios = scenarios
         self.panel = panel
         self.assistant = assistant
+        self.issueReporter = issueReporter
         self.resolver = resolver
         // Testçinin son yazdığı akış uygulama yeniden açıldığında geri gelir.
         _script = AppStorage(wrappedValue: initialScript, "MisterO.script")
-        _section = State(initialValue: scenarios.isConfigured ? .scenarios : .log)
+        let assistantReady = assistant.availability == .available
+        _section = State(initialValue: assistantReady ? .assistant : scenarios.isConfigured ? .scenarios : .advanced)
     }
 
-    private var isBusy: Bool { runner.isRunning || scenarios.isRunning }
+    private var isBusy: Bool { runner.isRunning || scenarios.isRunning || assistant.isWorking }
 
     var body: some View {
         ZStack {
@@ -52,7 +61,7 @@ struct TestPanelView: View {
                     .frame(maxHeight: .infinity, alignment: .bottom)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             } else {
-                FloatingBubble(runner: runner, scenarios: scenarios, panel: panel)
+                FloatingBubble(runner: runner, scenarios: scenarios, assistant: assistant, panel: panel)
                     .transition(.scale(scale: 0.6).combined(with: .opacity))
             }
         }
@@ -61,13 +70,24 @@ struct TestPanelView: View {
             // Suite sırasında her senaryonun sonunda açılmasın; suite bitince açılır.
             // Asistanın çalıştırdığı tek tek adımlar da paneli Log'a çekmesin.
             guard state.isFinished, scenarios.suite?.isRunning != true, section != .assistant else { return }
-            section = .log
+            section = .advanced
+            advancedPane = .log
             panel.expand()
         }
         .onReceive(scenarios.$suite.map { $0?.isRunning }.removeDuplicates()) { isRunning in
             guard isRunning == false else { return }
             section = .scenarios
             panel.expand()
+        }
+        .onReceive(assistant.$stage.removeDuplicates()) { stage in
+            // Asistan kontrolleri kendisi koşarken panel küçük durur; bitince rapor açılır.
+            switch stage {
+            case .finished, .failed:
+                section = .assistant
+                panel.expand()
+            case .idle, .planning, .running:
+                break
+            }
         }
     }
 
@@ -77,32 +97,27 @@ struct TestPanelView: View {
         VStack(alignment: .leading, spacing: 10) {
             header
 
-            Picker("Bölüm", selection: sectionBinding) {
-                if scenarios.isConfigured {
-                    Text("Senaryolar").tag(Section.scenarios)
-                }
-                if assistant != nil {
-                    Text("Asistan").tag(Section.assistant)
-                }
-                Text("Log").tag(Section.log)
-                Text("Öğeler").tag(Section.elements)
+            Picker("Bölüm", selection: $section) {
+                Text("Asistan").tag(Section.assistant)
+                Text("Senaryolar").tag(Section.scenarios)
+                Text("Gelişmiş").tag(Section.advanced)
             }
             .pickerStyle(.segmented)
 
             switch section {
-            case .scenarios:
-                ScenarioListView(store: scenarios, isBusy: isBusy, onRun: run, onRunAll: runSuite,
-                                 onEdit: edit, onStop: stop)
-                    .frame(minHeight: 160, maxHeight: 440)
             case .assistant:
-                if let assistant {
-                    AssistantView(assistant: assistant) { flow in
-                        script = flow
-                        section = .log
-                    }
-                    .frame(minHeight: 180, maxHeight: 360)
+                AssistantView(assistant: assistant, scenarios: scenarios, issueReporter: issueReporter,
+                              onRun: beginRun) { flow in
+                    script = flow
+                    showLog()
                 }
-            case .log, .elements:
+                .frame(minHeight: 160, maxHeight: 440)
+            case .scenarios:
+                ScenarioListView(store: scenarios, isBusy: isBusy,
+                                 canRepair: assistant.availability == .available,
+                                 onRun: run, onRunAll: runSuite, onEdit: edit, onRepair: repair, onStop: stop)
+                    .frame(minHeight: 160, maxHeight: 440)
+            case .advanced:
                 editorSection
             }
         }
@@ -126,11 +141,18 @@ struct TestPanelView: View {
 
         controls
 
+        Picker("Gelişmiş", selection: advancedPaneBinding) {
+            Text("Log").tag(AdvancedPane.log)
+            Text("Öğeler").tag(AdvancedPane.elements)
+        }
+        .pickerStyle(.segmented)
+        .controlSize(.small)
+
         Group {
-            switch section {
+            switch advancedPane {
             case .elements:
                 ElementListView(elements: elements, onRefresh: refreshElements, onInsert: appendLine)
-            case .log, .scenarios, .assistant:
+            case .log:
                 RunLogView(runner: runner)
             }
         }
@@ -189,7 +211,7 @@ struct TestPanelView: View {
 
     private func play() {
         isEditorFocused = false
-        section = .log
+        showLog()
         // Akış hatalıysa panel açık kalır, hatalar log'da satır numarasıyla görünür.
         guard runner.validate(script) else { return }
         panel.collapse()
@@ -221,7 +243,19 @@ struct TestPanelView: View {
     /// Senaryoyu düzenlemek ya da parça parça denemek için editöre alır.
     private func edit(_ scenario: Scenario) {
         script = scenario.script
-        section = .log
+        showLog()
+    }
+
+    /// Düşen senaryoyu asistan amacıyla yeniden koşar; geçerse Asistan sekmesinden güncellenir.
+    private func repair(_ scenario: Scenario) {
+        beginRun()
+        section = .assistant
+        assistant.repair(scenario)
+    }
+
+    private func showLog() {
+        section = .advanced
+        advancedPane = .log
     }
 
     private func collapse() {
@@ -238,11 +272,11 @@ struct TestPanelView: View {
         script += separator + line
     }
 
-    private var sectionBinding: Binding<Section> {
+    private var advancedPaneBinding: Binding<AdvancedPane> {
         Binding {
-            section
+            advancedPane
         } set: { newValue in
-            section = newValue
+            advancedPane = newValue
             if newValue == .elements { refreshElements() }
         }
     }

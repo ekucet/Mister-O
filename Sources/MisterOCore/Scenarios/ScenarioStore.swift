@@ -2,6 +2,8 @@ import Combine
 import Foundation
 
 /// Senaryo kataloğunu yükler, doğrular ve senaryoları tek tek ya da toplu (suite) koşturur.
+/// Asistanın ürettiği senaryolar cihazda **taslak** olarak saklanır, katalogla birlikte listelenir ve
+/// QA ekibine katalog JSON'u olarak paylaşılabilir.
 ///
 /// Toplu koşuda her senaryodan önce `resetApp` işleyicisi çağrılır; böylece 2. senaryo 1.'nin
 /// bıraktığı ekrandan değil, bilinen başlangıç durumundan başlar. Bir senaryo başarısız olsa da
@@ -48,7 +50,10 @@ public final class ScenarioStore: ObservableObject {
         public var scenarioIDs: [Scenario.ID] { scenarios.map(\.id) }
     }
 
+    /// Uzak/paket kataloğundaki senaryolar.
     @Published public private(set) var scenarios: [Scenario] = []
+    /// Cihazda saklanan taslaklar (asistandan kaydedilenler).
+    @Published public private(set) var drafts: [Scenario] = []
     @Published public private(set) var status: CatalogStatus = .idle
     @Published public private(set) var runs: [Scenario.ID: Run] = [:]
     @Published public private(set) var suite: Suite?
@@ -62,6 +67,8 @@ public final class ScenarioStore: ObservableObject {
     private let resetApp: (@MainActor () async -> Void)?
     private let settleTime: Duration
     private let cache: ScenarioCache?
+    private let draftsDefaults: UserDefaults?
+    private static let draftsKey = "MisterO.drafts"
     private var validations: [Scenario.ID: Validation] = [:]
     private var task: Task<Void, Never>?
 
@@ -73,22 +80,36 @@ public final class ScenarioStore: ObservableObject {
         runner: InAppTestRunner,
         resetApp: (@MainActor () async -> Void)? = nil,
         settleTime: Duration = .milliseconds(600),
-        cacheDirectory: URL? = ScenarioCache.defaultDirectory
+        cacheDirectory: URL? = ScenarioCache.defaultDirectory,
+        draftsDefaults: UserDefaults? = .standard
     ) {
         self.feed = feed
         self.runner = runner
         self.resetApp = resetApp
         self.settleTime = settleTime
         self.cache = cacheDirectory.map(ScenarioCache.init(directory:))
+        self.draftsDefaults = draftsDefaults
+        if let data = draftsDefaults?.data(forKey: Self.draftsKey),
+           let stored = try? JSONDecoder().decode([Scenario].self, from: data) {
+            drafts = stored
+            for draft in stored { validations[draft.id] = Self.validate(draft) }
+        }
     }
 
     public var isConfigured: Bool { feed != nil }
+
+    /// Önce taslaklar, sonra katalog.
+    public var allScenarios: [Scenario] { drafts + scenarios }
+
+    public func isDraft(_ scenario: Scenario) -> Bool {
+        drafts.contains { $0.id == scenario.id }
+    }
     public var isRunning: Bool { hasTask || activeScenarioID != nil }
 
     /// Katalogdaki etiketler, ilk görüldükleri sırayla.
     public var tags: [String] {
         var seen = Set<String>()
-        return scenarios.flatMap(\.tags).filter { seen.insert($0).inserted }
+        return allScenarios.flatMap(\.tags).filter { seen.insert($0).inserted }
     }
 
     public func validation(for scenario: Scenario) -> Validation {
@@ -118,8 +139,53 @@ public final class ScenarioStore: ObservableObject {
     }
 
     private func apply(_ loaded: [Scenario]) {
-        validations = Dictionary(uniqueKeysWithValues: loaded.map { ($0.id, Self.validate($0)) })
+        for scenario in loaded { validations[scenario.id] = Self.validate(scenario) }
         scenarios = loaded
+    }
+
+    // MARK: - Taslaklar
+
+    /// Taslak kaydeder; aynı id'li taslak varsa günceller.
+    public func saveDraft(_ scenario: Scenario) {
+        validations[scenario.id] = Self.validate(scenario)
+        if let index = drafts.firstIndex(where: { $0.id == scenario.id }) {
+            drafts[index] = scenario
+        } else {
+            drafts.insert(scenario, at: 0)
+        }
+        persistDrafts()
+    }
+
+    /// Asistanın onardığı adımları kaydeder. Taslak yerinde güncellenir; katalogdaki senaryo uzak dosyada
+    /// değiştirilemediği için "(onarıldı)" adlı yeni bir taslak olur ve QA ekibine paylaşılır.
+    @discardableResult
+    public func saveRepair(of original: Scenario, steps: [String]) -> Scenario {
+        let script = steps.joined(separator: "\n")
+        let repaired = isDraft(original)
+            ? Scenario(id: original.id, name: original.name, summary: original.summary, tags: original.tags,
+                       resetsApp: original.resetsApp, goal: original.goal, script: script)
+            : Scenario(id: "\(original.id)-onarildi", name: "\(original.name) (onarıldı)", summary: original.summary,
+                       tags: original.tags + ["taslak", "onarıldı"], resetsApp: original.resetsApp,
+                       goal: original.goal, script: script)
+        runs[repaired.id] = nil
+        saveDraft(repaired)
+        return repaired
+    }
+
+    public func deleteDraft(_ id: Scenario.ID) {
+        drafts.removeAll { $0.id == id }
+        runs[id] = nil
+        persistDrafts()
+    }
+
+    /// Taslakların katalog dosyası biçimi; QA ekibi `scenarios` dizisine ekler.
+    public var draftsCatalogJSON: String {
+        ScenarioCatalog.json(for: drafts)
+    }
+
+    private func persistDrafts() {
+        guard let draftsDefaults, let data = try? JSONEncoder().encode(drafts) else { return }
+        draftsDefaults.set(data, forKey: Self.draftsKey)
     }
 
     private static func validate(_ scenario: Scenario) -> Validation {

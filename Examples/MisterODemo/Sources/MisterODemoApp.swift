@@ -17,7 +17,10 @@ struct MisterODemoApp: App {
                     scenarios: DemoFlow.catalog,
                     // Her senaryo giriş ekranından başlasın.
                     resetApp: { model.reset() },
-                    assistantModel: DemoFlow.assistantModel
+                    assistantModel: DemoFlow.assistantModel,
+                    // Asistan staging test hesabını bilsin; geçerli giriş için sormasın.
+                    testData: ["Test hesabı e-postası": "tester@mistero.app", "Test hesabı şifresi": "123456"],
+                    issueReporter: DemoFlow.issueReporter
                 )
                 #endif
         }
@@ -38,6 +41,14 @@ enum DemoFlow {
     assertVisible: "Kaydedildi: Mister O (1)"
     wait: 1
     """
+
+    /// `MISTERO_ISSUE_WEBHOOK` verilirse sorunlar bu webhook'a gönderilir (Jira Automation, Zapier…).
+    static var issueReporter: (any IssueReporter)? {
+        guard let raw = ProcessInfo.processInfo.environment["MISTERO_ISSUE_WEBHOOK"], let url = URL(string: raw) else {
+            return nil
+        }
+        return WebhookIssueReporter(name: "Jira", url: url)
+    }
 
     /// `nil` ise iOS 26+'da Apple'ın cihaz içi modeli kullanılır.
     static var assistantModel: (any FlowAssistantModel)? {

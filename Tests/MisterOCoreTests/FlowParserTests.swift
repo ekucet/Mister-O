@@ -10,6 +10,9 @@ struct FlowParserTests {
         type: "email_field" -> "test@example.com"
         wait: 2
         assertVisible: "welcome_label"
+        assertNotVisible: error_label
+        AssertEnabled: save_button
+        assertDisabled: login_button
         """)
 
         #expect(steps.map(\.command) == [
@@ -17,9 +20,12 @@ struct FlowParserTests {
             .typeText("email_field", text: "test@example.com"),
             .wait(seconds: 2),
             .assertVisible("welcome_label"),
+            .assertNotVisible("error_label"),
+            .assertEnabled("save_button"),
+            .assertDisabled("login_button"),
         ])
-        #expect(steps.map(\.line) == [1, 2, 3, 4])
-        #expect(steps.map(\.id) == [0, 1, 2, 3])
+        #expect(steps.map(\.line) == [1, 2, 3, 4, 5, 6, 7])
+        #expect(steps.map(\.id) == [0, 1, 2, 3, 4, 5, 6])
     }
 
     @Test func skipsCommentsAndBlankLinesButKeepsLineNumbers() throws {

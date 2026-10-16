@@ -121,6 +121,33 @@ struct ViewResolverTests {
         #expect(counts.custom == 1)
     }
 
+    @Test func inspectReportsFieldKindsValuesAndState() {
+        let email = UITextField(frame: CGRect(x: 0, y: 0, width: 200, height: 40))
+        email.accessibilityIdentifier = "email"
+        email.keyboardType = .emailAddress
+        let password = UITextField(frame: CGRect(x: 0, y: 50, width: 200, height: 40))
+        password.accessibilityIdentifier = "password"
+        password.isSecureTextEntry = true
+        password.text = "gizli123"
+        let send = UIButton(type: .system)
+        send.setTitle("Gönder", for: .normal)
+        send.frame = CGRect(x: 0, y: 100, width: 200, height: 44)
+        send.isEnabled = false
+        [email, password, send].forEach(window.addSubview)
+
+        let items = Dictionary(uniqueKeysWithValues: resolver.inspect().map { ($0.suggestedQuery, $0) })
+        #expect(items["email"]?.inputKind == "email")
+        #expect(items["email"]?.value == nil)
+        #expect(items["password"]?.inputKind == "password")
+        #expect(items["password"]?.value == "(gizli, dolu)")
+        #expect(items["Gönder"]?.isEnabled == false)
+
+        let driver = UIKitDriver(resolver: resolver)
+        #expect(driver.isEnabled("Gönder") == false)
+        #expect(driver.isEnabled("email") == true)
+        #expect(driver.isEnabled("yok") == nil)
+    }
+
     @Test func tapOnDisabledControlIsRetryable() throws {
         let button = UIButton(type: .system)
         button.setTitle("Gönder", for: .normal)

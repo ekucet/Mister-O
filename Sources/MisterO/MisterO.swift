@@ -23,7 +23,7 @@ public enum MisterO {
     public private(set) static var runner: InAppTestRunner?
     /// Senaryo kataloğu ve toplu koşular.
     public private(set) static var scenarios: ScenarioStore?
-    /// Akış oluşturan asistan (dil modeli yoksa `nil`).
+    /// Ekranı kendi başına test eden asistan.
     public private(set) static var assistant: FlowAssistant?
     private static var overlay: OverlayWindow?
 
@@ -31,8 +31,11 @@ public enum MisterO {
     ///   - scenarios: Testçinin panelde göreceği senaryo kataloğunun kaynağı.
     ///   - resetApp: Her senaryodan önce uygulamayı başlangıç durumuna getirir (navigasyonu köke al,
     ///     oturumu kapat…). Verilmezse senaryolar bir öncekinin bıraktığı ekrandan devam eder.
-    ///   - assistantModel: Asistan sekmesinin dil modeli. Verilmezse iOS 26+'da Apple'ın cihaz içi modeli
-    ///     kullanılır; daha eski sistemlerde sekme görünmez.
+    ///   - assistantModel: Asistanın dil modeli. Verilmezse iOS 26+'da Apple'ın cihaz içi modeli kullanılır;
+    ///     daha eski sistemlerde Asistan sekmesi nedenini açıklar.
+    ///   - testData: Asistanın bilmesi gereken test verileri (staging test hesabı gibi). Örnek:
+    ///     `["Test hesabı e-postası": "qa@firma.com", "Test hesabı şifresi": "…"]`. Asistan bunları sormaz.
+    ///   - issueReporter: Asistanın bulduğu sorunları takip aracınızda kayda çevirir (örn. `WebhookIssueReporter`).
     ///   - enablesSwiftUIAccessibility: SwiftUI öğelerini bulabilmek için uygulama erişilebilirliğini
     ///     açar (private API, ayrıntı `AccessibilityBootstrap`'ta). Yalnızca UIKit ekranlarınız varsa `false` verin.
     public static func install(
@@ -41,6 +44,8 @@ public enum MisterO {
         scenarios feed: ScenarioFeed? = nil,
         resetApp: (@MainActor () async -> Void)? = nil,
         assistantModel: (any FlowAssistantModel)? = nil,
+        testData: [String: String] = [:],
+        issueReporter: (any IssueReporter)? = nil,
         configuration: InAppTestRunner.Configuration = .default,
         enablesSwiftUIAccessibility: Bool = true
     ) {
@@ -52,7 +57,7 @@ public enum MisterO {
         let driver = UIKitDriver()
         let runner = InAppTestRunner(driver: driver, configuration: configuration)
         let store = ScenarioStore(feed: feed, runner: runner, resetApp: resetApp)
-        let assistant = makeAssistant(model: assistantModel, runner: runner, resolver: driver.resolver)
+        let assistant = makeAssistant(model: assistantModel, driver: driver, resetApp: resetApp, testData: testData)
         let panel = PanelModel()
         let window = OverlayWindow(windowScene: scene, panel: panel)
 
@@ -63,8 +68,8 @@ public enum MisterO {
         }
 
         let host = UIHostingController(rootView: TestPanelView(
-            runner: runner, scenarios: store, panel: panel, assistant: assistant, resolver: driver.resolver,
-            initialScript: initialScript
+            runner: runner, scenarios: store, panel: panel, assistant: assistant, issueReporter: issueReporter,
+            resolver: driver.resolver, initialScript: initialScript
         ))
         host.view.backgroundColor = .clear
         window.rootViewController = host
@@ -94,18 +99,28 @@ public enum MisterO {
 
     private static func makeAssistant(
         model: (any FlowAssistantModel)?,
-        runner: InAppTestRunner,
-        resolver: ViewResolver
-    ) -> FlowAssistant? {
-        if let model {
-            return FlowAssistant(model: model, runner: runner, screen: { resolver.screenElements() })
-        }
+        driver: UIKitDriver,
+        resetApp: (@MainActor () async -> Void)?,
+        testData: [String: String]
+    ) -> FlowAssistant {
+        // Asistanın kendi runner'ı: "öğe yok" ya da "pasif" cevabını 5 sn beklemeden almalı.
+        let runner = InAppTestRunner(driver: driver, configuration: .init(
+            elementTimeout: .seconds(2), pollInterval: .milliseconds(150), delayBetweenSteps: .zero
+        ))
+        let resolver = driver.resolver
+        let facts = testData.sorted { $0.key < $1.key }.map { AssistantAnswer(question: $0.key, answer: $0.value) }
+        return FlowAssistant(model: model ?? defaultAssistantModel(), runner: runner,
+                             screen: { resolver.screenElements() }, navigator: ScreenAnchor(), resetApp: resetApp,
+                             appFacts: facts, memory: KeychainAssistantMemory())
+    }
+
+    private static func defaultAssistantModel() -> any FlowAssistantModel {
         #if canImport(FoundationModels)
         if #available(iOS 26.0, *) {
-            return FlowAssistant(model: AppleFlowAssistantModel(), runner: runner, screen: { resolver.screenElements() })
+            return AppleFlowAssistantModel()
         }
         #endif
-        return nil
+        return UnavailableAssistantModel(reason: "Asistan için iOS 26 ve Apple Intelligence gerekir.")
     }
 }
 
@@ -129,13 +144,15 @@ public extension View {
         scenarios: ScenarioFeed? = nil,
         resetApp: (@MainActor () async -> Void)? = nil,
         assistantModel: (any FlowAssistantModel)? = nil,
+        testData: [String: String] = [:],
+        issueReporter: (any IssueReporter)? = nil,
         configuration: InAppTestRunner.Configuration = .default,
         enablesSwiftUIAccessibility: Bool = true
     ) -> some View {
         background(SceneHook { scene in
             MisterO.install(in: scene, initialScript: initialScript, scenarios: scenarios, resetApp: resetApp,
-                            assistantModel: assistantModel, configuration: configuration,
-                            enablesSwiftUIAccessibility: enablesSwiftUIAccessibility)
+                            assistantModel: assistantModel, testData: testData, issueReporter: issueReporter,
+                            configuration: configuration, enablesSwiftUIAccessibility: enablesSwiftUIAccessibility)
         })
     }
 }

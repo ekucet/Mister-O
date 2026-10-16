@@ -20,11 +20,27 @@ struct ElementAttributes {
     let label: String?
     /// Ekranda görünen metinler (buton başlığı, label metni, text field içeriği/placeholder…).
     let texts: [String]
+    /// UIKit `isEnabled` ya da SwiftUI `.disabled` (erişilebilirlikte `notEnabled`).
+    let isEnabled: Bool
+    /// Metin alanının içeriği; gizli alanlarda yalnızca dolu olduğu bilgisi.
+    let value: String?
+    /// Metin alanının beklediği veri ("email", "phone", "password"…); asistan doğru değeri seçsin diye.
+    let inputKind: String?
 
     init(_ object: NSObject) {
         identifier = Self.accessibilityIdentifier(of: object)?.nonEmpty
         label = object.accessibilityLabel?.nonEmpty
-        texts = (object as? UIView).map(Self.displayedTexts(of:)) ?? []
+        if let view = object as? UIView {
+            texts = Self.displayedTexts(of: view)
+            isEnabled = Self.isEnabled(view)
+            value = Self.inputValue(of: view)
+            inputKind = Self.inputKind(of: view)
+        } else {
+            texts = []
+            isEnabled = !object.accessibilityTraits.contains(.notEnabled)
+            value = object.accessibilityValue?.nonEmpty
+            inputKind = object.accessibilityTraits.contains(.searchField) ? "text" : nil
+        }
     }
 
     /// Kullanıcıya gösterilecek en iyi ad (inspector ve sorgu önerisi için).
@@ -53,6 +69,51 @@ struct ElementAttributes {
         let selector = #selector(getter: UIAccessibilityIdentification.accessibilityIdentifier)
         guard object.responds(to: selector) else { return nil }
         return object.perform(selector)?.takeUnretainedValue() as? String
+    }
+
+    private static func isEnabled(_ view: UIView) -> Bool {
+        if let control = view.firstAncestor(ofType: UIControl.self) { return control.isEnabled }
+        if let textView = view as? UITextView { return textView.isEditable }
+        return !view.accessibilityTraits.contains(.notEnabled)
+    }
+
+    private static func inputKind(of view: UIView) -> String? {
+        if view is UITextView { return "text" }
+        guard let field = view as? UITextField else { return nil }
+        if field.isSecureTextEntry { return "password" }
+        if let type = field.textContentType {
+            switch type {
+            case .emailAddress: return "email"
+            case .password, .newPassword: return "password"
+            case .oneTimeCode: return "code"
+            case .telephoneNumber: return "phone"
+            case .name, .givenName, .familyName, .nickname: return "name"
+            case .URL: return "url"
+            case .username: return "username"
+            case .postalCode: return "postal code"
+            case .fullStreetAddress, .streetAddressLine1, .addressCity: return "address"
+            default: break
+            }
+        }
+        switch field.keyboardType {
+        case .emailAddress: return "email"
+        case .phonePad, .namePhonePad: return "phone"
+        case .numberPad, .decimalPad, .asciiCapableNumberPad, .numbersAndPunctuation: return "number"
+        case .URL: return "url"
+        default: return "text"
+        }
+    }
+
+    private static func inputValue(of view: UIView) -> String? {
+        switch view {
+        case let field as UITextField:
+            guard let text = field.text, !text.isEmpty else { return nil }
+            return field.isSecureTextEntry ? "(gizli, dolu)" : text
+        case let textView as UITextView:
+            return textView.text?.nonEmpty
+        default:
+            return nil
+        }
     }
 
     private static func displayedTexts(of view: UIView) -> [String] {

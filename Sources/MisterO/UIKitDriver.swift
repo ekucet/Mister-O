@@ -25,6 +25,10 @@ public final class UIKitDriver: UIDriver {
         resolver.find(selector) != nil
     }
 
+    public func isEnabled(_ selector: ElementSelector) -> Bool? {
+        resolver.find(selector).map { ElementAttributes($0.object).isEnabled }
+    }
+
     private func element(for selector: ElementSelector) throws -> UIElement {
         guard let element = resolver.find(selector) else {
             throw DriverError.elementNotFound(selector)
