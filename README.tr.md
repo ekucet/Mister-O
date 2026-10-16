@@ -35,6 +35,9 @@ wait: 1.5
   da hepsini tek dokunuşla çalıştırır.
 - **SwiftUI ve UIKit.** SwiftUI `Button`, `TextField`, `SecureField`, `NavigationLink` ve UIKit
   kontrollerini `accessibilityIdentifier`, label ya da görünen metinle bulur.
+- **Akış asistanı (yapay zekâ).** Neyi test edeceğinizi düz cümleyle yazarsınız. Cihaz içi model
+  ekrana bakar, eksik bilgiyi sorar, her seferinde tek bir adım önerir ve çalıştırarak doğrular.
+  Prototip; bkz. [Akış asistanı](#akış-asistanı-yapay-zekâ).
 - **Kendisi bekler.** `tap`, `type` ve `assertVisible` öğe ekrana gelene ya da aktif olana kadar
   bekler; her geçişten sonra `wait` yazmanız gerekmez.
 - **Net sonuç.** Her adım satır numarası, süresi ve hata mesajıyla Başarılı / Başarısız / Atlandı
@@ -70,6 +73,11 @@ targets: [
     ]),
 ]
 ```
+
+> **Beta:** [Akış asistanı](#akış-asistanı-yapay-zekâ) `0.3.0-beta.1` sürümünde. Swift Package Manager
+> `from:` ile asla ön sürüm (pre-release) seçmez; bu yüzden açıkça isteyin:
+> `.package(url: "https://github.com/ekucet/Mister-O.git", exact: "0.3.0-beta.1")`.
+> Xcode'da *Dependency Rule* olarak *Exact Version* `0.3.0-beta.1` seçin.
 
 Ardından staging derlemesine bir derleme koşulu ekleyin; örneğin *Build Settings → Active
 Compilation Conditions* içine `STAGING`.
@@ -262,6 +270,80 @@ senaryoların beklediği duruma getirmelidir; örneğin navigasyonu köke almak 
 Reset'ten sonra Mister-O ekranın oturması için 0,6 sn bekler. `resetApp` vermezseniz kataloğu, her
 senaryo bir öncekinin bittiği yerden devam edecek şekilde sıralayın.
 
+## Akış asistanı (yapay zekâ)
+
+> **Prototip, `0.3.0-beta.1` sürümünde.** Panel ve asistan döngüsü test edildi; ancak Apple'ın cihaz
+> içi modeli henüz uçtan uca çalıştırılmadı (bkz. [Durum](#durum)). Beta'ya nasıl bağımlı olunacağı
+> için [Kurulum](#kurulum) bölümüne bakın.
+
+**Asistan** sekmesi düz cümleyle yazılmış bir hedefi doğrulanmış bir akışa çevirir:
+
+1. Testçi hedefi yazar, örneğin *"Yanlış şifreyle girişte hata mesajı çıkmalı"*.
+2. Asistan o anki ekranı okur (**Öğeler** sekmesindeki listenin aynısı). Ya soru sorar (*"Hangi
+   e-posta ile gireyim?"*) ya da tek bir adım önerir, örneğin `type: email_field -> qa@firma.com`.
+3. Testçi **Çalıştır**'a ya da **Başka öner**'e basar; isterse nedenini de yazar.
+4. Adım uygulamada çalışır, yalnızca geçen adımlar akışa girer. Asistan yeni ekranı okuyup sıradaki
+   adımı önerir; hedefe ulaşıp doğrulayana kadar böyle devam eder.
+5. **Editöre al** akışı editöre yükler. **Katalog kaydı** ise [senaryo kataloğuna](#senaryo-kataloğu)
+   yapıştırılacak hazır bir JSON kaydını panoya kopyalar.
+
+### Küçük bir modelle nasıl güvenilir kalır
+
+- **Seçenekler yalnızca ekrandan:** Modelin cevabı "guided generation" ile sınırlanır. `action`
+  yalnızca `tap`, `type`, `assertVisible`, `ask`, `finish`, `fail` olabilir; `target` yalnızca o an
+  ekranda bulunan bir öğe olabilir. Model id uyduramaz ya da hatalı satır yazamaz.
+- **Her seferinde tek adım:** Her tur kısa bir özetle yeni bir oturum başlatır: hedef, cevaplar,
+  şimdiye kadarki adımlar, son sorun ve o anki ekran. Böylece küçük bağlam penceresi (iOS 26'da
+  4.096 token) dolmaz.
+- **Her şey çalıştırılır:** Her adımdan sonra asistan ekranın oturması için 0,7 sn bekler, sonra
+  ekrana yeniden bakar. Üst üste üç adım başarısız olursa durur ve hedefin netleştirilmesini ister.
+
+### Gereksinimler
+
+Varsayılan model Apple'ın cihaz içi modelidir (Foundation Models). iOS 26 veya üzeri, Apple
+Intelligence destekleyen bir cihaz ve açık Apple Intelligence gerekir. Model kullanılamıyorsa sekme
+nedenini gösterir; iOS 16–25'te sekme görünmez. Türkçe desteklenen diller arasında. Her şey cihazda
+çalışır: API anahtarı, internet ya da ücret yok.
+
+### Testi asistanın kendisinin koşması
+
+**Otomatik ilerle** açıkken asistan onay beklemez; hedefe ulaştığına ya da ulaşamayacağına karar
+verene kadar uygulamayı kendisi kullanır, yani testi model koşar. Hızlı keşif kontrolleri için
+kullanışlıdır. Ancak kararı küçük bir model verir, koşular tekrarlanabilir değildir ve daha yavaştır.
+Regresyon testleri için asistana akışı bir kez yazdırın, kataloğa kaydedin ve o andan sonra
+deterministik olarak koşturun.
+
+### Başka bir model kullanmak
+
+`FlowAssistantModel` protokolüne uyan herhangi bir tipi verebilirsiniz; örneğin daha büyük bir modele
+giden şirket içi bir proxy ya da aynı ağdaki bir Mac'te çalışan bir model:
+
+```swift
+struct ProxyModel: FlowAssistantModel {
+    var availability: AssistantAvailability { .available }
+    func nextDecision(for context: AssistantContext) async throws -> AssistantDecision {
+        // context.prompt ve context.targets'ı servisinize gönderip cevabı eşleyin.
+    }
+}
+
+.misterOTestPanel(assistantModel: ProxyModel())
+```
+
+Uzak bir model kullanırsanız ekrandaki öğe adları ve testçinin cevapları cihazdan çıkar.
+
+### Durum
+
+- Asistan döngüsü (soru, onay, reddetme, otomatik mod, hata sınırı, katalog kaydı) sahte bir modelle
+  birim testleriyle kapsanıyor.
+- Asistan sekmesi, demo'nun kural tabanlı modeliyle (`MISTERO_ASSISTANT=demo`) iOS 27 simülatöründe
+  uçtan uca denendi: soru → cevap → onaylanan dört adım → bitiş → katalog kaydı.
+- Üretim şeması, model gerektirmeyen bir birim testiyle doğrulanıyor. Gerçek Apple modelini çağıran
+  iki entegrasyon testi var; model hazır değilse atlanıyorlar. Geliştirmenin yapıldığı makinede
+  model henüz hazır olmadığı için bu testler henüz koşmadı.
+- iOS simülatörü modeli "kullanılabilir" olarak bildiriyor, ancak üretim Apple'ın güvenlik filtresinden
+  "Simulator is not supported" hatasıyla düşüyor. Gerçek modeli bir cihazda deneyin; simülatörde
+  sekme bunu açık bir mesajla söylüyor.
+
 ## Uygulamanızı test edilebilir yapmak
 
 Id'ler, metin ya da dil değişse bile akışları sağlam tutar:
@@ -289,6 +371,7 @@ değişince bozulur.
     initialScript: "tap: \"login_button\"",          // panel ilk açıldığında editörde görünür
     scenarios: .bundled("mistero-scenarios"),        // senaryo kataloğu (yukarıya bakın)
     resetApp: { router.path = [] },                  // her senaryodan önce çalışır
+    assistantModel: nil,                             // nil = iOS 26+'da Apple'ın cihaz içi modeli
     configuration: .init(
         elementTimeout: .seconds(8),                 // öğe başına bekleme (varsayılan 5 sn)
         pollInterval: .milliseconds(200),            // ekranın yeniden taranma aralığı
@@ -299,7 +382,7 @@ değişince bozulur.
 )
 ```
 
-`MisterO.install(in:initialScript:scenarios:resetApp:configuration:enablesSwiftUIAccessibility:)`
+`MisterO.install(in:initialScript:scenarios:resetApp:assistantModel:configuration:enablesSwiftUIAccessibility:)`
 aynı parametreleri alır. `MisterO.uninstall()` paneli kaldırır ve erişilebilirlik ayarını eski haline döndürür.
 
 ## Akışı koddan çalıştırmak
@@ -336,7 +419,10 @@ MisterOCore  (yalnızca Foundation, macOS'ta test edilir)
 ├── InAppTestRunner     @MainActor async/await motor: sıra, bekleme, zaman aşımı, iptal, rapor
 ├── UIDriver            runner'ın ekranla konuştuğu protokol
 ├── ScenarioFeed        senaryo kataloğunun kaynağı (uzak, paket, kod içi, özel)
-└── ScenarioStore       kataloğu yükler, önbelleğe alır, doğrular; tek senaryo ya da suite koşturur
+├── ScenarioStore       kataloğu yükler, önbelleğe alır, doğrular; tek senaryo ya da suite koşturur
+├── FlowAssistant       hedef → doğrulanmış akış, her seferinde çalıştırılan tek bir adımla
+├── FlowAssistantModel  asistanın arkasındaki dil modeli için protokol
+└── AppleFlowAssistantModel  guided generation ile Apple'ın cihaz içi modeli (iOS 26+)
 
 MisterO  (UIKit + SwiftUI)
 ├── UIKitDriver         UIDriver = ViewResolver + ActionExecutor
@@ -386,8 +472,9 @@ yöntemi kullanır.
   açık API ile tetiklenemez; adım "tıklanabilir değil" hatasıyla biter.
 - **Gerçek dokunuş yok:** öğenin üstünü başka bir view kapatsa bile eylem çalışır. Eşitlikte en
   öndeki öğe seçilir ama hit-test kontrolü yapılmaz.
-- **Süreç dışı UI:** sistem izin diyalogları, klavyenin kendisi, share sheet içeriği ve
-  `WKWebView` içindeki web içeriğine erişilemez.
+- **Süreç dışı UI:** sistem izin diyalogları, girişten sonra çıkan "Parolayı kaydet" penceresi,
+  klavyenin kendisi, share sheet içeriği ve `WKWebView` içindeki web içeriğine erişilemez. Bu
+  pencereler programatik adımları engellemez, ama testçinin elle kapatması gerekebilir.
 - **Şimdiye kadar test edilenler:** iOS 27 simülatöründe demo akışı SwiftUI `TextField` /
   `SecureField` / `Button` / `NavigationLink` ve UIKit `UITextField` / `UIButton(primaryAction:)`
   ile uçtan uca geçiyor. `resetApp` ile 4 senaryoluk bir suite, uzak katalog ve çevrimdışı önbellek
@@ -410,7 +497,8 @@ xcodebuild test -scheme MisterO -destination 'platform=iOS Simulator,name=iPhone
 SwiftUI giriş ekranı ve bir UIKit ekranı içeren demo uygulaması `Examples/MisterODemo` altında.
 İçinde 4 senaryoluk bir katalog (`Sources/mistero-scenarios.json`; biri bilerek başarısız olur) ve bir
 `resetApp` işleyicisi var. Kataloğu bir URL'den yüklemek için `MISTERO_SCENARIOS_URL` ortam
-değişkenini verin:
+değişkenini verin. Apple modelinin olmadığı yerlerde Asistan sekmesini kural tabanlı bir yedek modelle
+denemek için `MISTERO_ASSISTANT=demo` verin:
 
 ```bash
 open Examples/MisterODemo/MisterODemo.xcodeproj

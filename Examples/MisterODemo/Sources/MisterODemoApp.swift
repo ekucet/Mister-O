@@ -16,7 +16,8 @@ struct MisterODemoApp: App {
                     initialScript: DemoFlow.login,
                     scenarios: DemoFlow.catalog,
                     // Her senaryo giriş ekranından başlasın.
-                    resetApp: { model.reset() }
+                    resetApp: { model.reset() },
+                    assistantModel: DemoFlow.assistantModel
                 )
                 #endif
         }
@@ -37,6 +38,11 @@ enum DemoFlow {
     assertVisible: "Kaydedildi: Mister O (1)"
     wait: 1
     """
+
+    /// `nil` ise iOS 26+'da Apple'ın cihaz içi modeli kullanılır.
+    static var assistantModel: (any FlowAssistantModel)? {
+        ProcessInfo.processInfo.environment["MISTERO_ASSISTANT"] == "demo" ? DemoAssistantModel() : nil
+    }
 
     /// Paketteki mistero-scenarios.json; `MISTERO_SCENARIOS_URL` verilirse uzaktan yüklenir.
     static var catalog: ScenarioFeed {

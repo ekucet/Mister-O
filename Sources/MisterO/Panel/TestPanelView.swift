@@ -2,11 +2,12 @@
 import MisterOCore
 import SwiftUI
 
-/// Test paneli: senaryo kataloğu, akış editörü, Çalıştır/Durdur, adım logu ve ekran öğeleri listesi.
+/// Test paneli: senaryo kataloğu, asistan, akış editörü, Çalıştır/Durdur, adım logu ve ekran öğeleri listesi.
 /// Kapalıyken sürüklenebilir bir baloncuğa dönüşür; koşu sırasında uygulama görünür kalır.
 struct TestPanelView: View {
     private enum Section: Hashable {
         case scenarios
+        case assistant
         case log
         case elements
     }
@@ -14,6 +15,7 @@ struct TestPanelView: View {
     @ObservedObject var runner: InAppTestRunner
     @ObservedObject var scenarios: ScenarioStore
     @ObservedObject var panel: PanelModel
+    let assistant: FlowAssistant?
     let resolver: ViewResolver
 
     @AppStorage private var script: String
@@ -21,11 +23,12 @@ struct TestPanelView: View {
     @State private var section: Section
     @State private var elements: [InspectedElement] = []
 
-    init(runner: InAppTestRunner, scenarios: ScenarioStore, panel: PanelModel, resolver: ViewResolver,
-         initialScript: String) {
+    init(runner: InAppTestRunner, scenarios: ScenarioStore, panel: PanelModel, assistant: FlowAssistant?,
+         resolver: ViewResolver, initialScript: String) {
         self.runner = runner
         self.scenarios = scenarios
         self.panel = panel
+        self.assistant = assistant
         self.resolver = resolver
         // Testçinin son yazdığı akış uygulama yeniden açıldığında geri gelir.
         _script = AppStorage(wrappedValue: initialScript, "MisterO.script")
@@ -37,7 +40,8 @@ struct TestPanelView: View {
     var body: some View {
         ZStack {
             if panel.isExpanded {
-                Color.black.opacity(0.25)
+                // Asistan adım adım çalışırken uygulama daha net görünsün.
+                Color.black.opacity(section == .assistant ? 0.08 : 0.25)
                     .ignoresSafeArea()
                     .onTapGesture(perform: collapse)
                     .transition(.opacity)
@@ -55,7 +59,8 @@ struct TestPanelView: View {
         .animation(.spring(response: 0.35, dampingFraction: 0.86), value: panel.isExpanded)
         .onReceive(runner.$state.removeDuplicates()) { state in
             // Suite sırasında her senaryonun sonunda açılmasın; suite bitince açılır.
-            guard state.isFinished, scenarios.suite?.isRunning != true else { return }
+            // Asistanın çalıştırdığı tek tek adımlar da paneli Log'a çekmesin.
+            guard state.isFinished, scenarios.suite?.isRunning != true, section != .assistant else { return }
             section = .log
             panel.expand()
         }
@@ -76,16 +81,28 @@ struct TestPanelView: View {
                 if scenarios.isConfigured {
                     Text("Senaryolar").tag(Section.scenarios)
                 }
+                if assistant != nil {
+                    Text("Asistan").tag(Section.assistant)
+                }
                 Text("Log").tag(Section.log)
                 Text("Öğeler").tag(Section.elements)
             }
             .pickerStyle(.segmented)
 
-            if section == .scenarios {
+            switch section {
+            case .scenarios:
                 ScenarioListView(store: scenarios, isBusy: isBusy, onRun: run, onRunAll: runSuite,
                                  onEdit: edit, onStop: stop)
                     .frame(minHeight: 160, maxHeight: 440)
-            } else {
+            case .assistant:
+                if let assistant {
+                    AssistantView(assistant: assistant) { flow in
+                        script = flow
+                        section = .log
+                    }
+                    .frame(minHeight: 180, maxHeight: 360)
+                }
+            case .log, .elements:
                 editorSection
             }
         }
@@ -113,7 +130,7 @@ struct TestPanelView: View {
             switch section {
             case .elements:
                 ElementListView(elements: elements, onRefresh: refreshElements, onInsert: appendLine)
-            case .log, .scenarios:
+            case .log, .scenarios, .assistant:
                 RunLogView(runner: runner)
             }
         }

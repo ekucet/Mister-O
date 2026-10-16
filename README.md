@@ -34,6 +34,9 @@ wait: 1.5
   the app. Testers pick from a list and run one scenario, a tag or all of them with one tap.
 - **SwiftUI and UIKit.** Finds SwiftUI `Button`, `TextField`, `SecureField`, `NavigationLink` and
   UIKit controls by `accessibilityIdentifier`, label or visible text.
+- **Flow assistant (AI).** Describe what to test in plain words. An on-device model looks at the
+  screen, asks for missing details, proposes one step at a time and runs it to check it works.
+  Prototype; see [Flow assistant](#flow-assistant-ai).
 - **Waits for you.** `tap`, `type` and `assertVisible` wait until the element shows up or becomes
   enabled, so flows don't need sleeps after every navigation.
 - **Clear results.** Each step is shown as passed, failed or skipped, with its line number,
@@ -72,6 +75,11 @@ targets: [
     ]),
 ]
 ```
+
+> **Beta:** the [flow assistant](#flow-assistant-ai) is in `0.3.0-beta.1`. Swift Package Manager never
+> picks a pre-release from `from:`, so ask for it explicitly:
+> `.package(url: "https://github.com/ekucet/Mister-O.git", exact: "0.3.0-beta.1")`.
+> In Xcode, set *Dependency Rule* to *Exact Version* `0.3.0-beta.1`.
 
 Then add a compilation condition to the staging build, for example `STAGING` in
 *Build Settings → Active Compilation Conditions*.
@@ -265,6 +273,80 @@ signing out:
 After the reset, Mister-O waits 0.6 s for the screen to settle. If you don't provide `resetApp`,
 order the catalog so that each scenario continues from where the previous one ended.
 
+## Flow assistant (AI)
+
+> **Prototype, in `0.3.0-beta.1`.** The panel and the assistant loop are tested, but the Apple
+> on-device model has not yet been run end to end (see [Status](#status)). See
+> [Installation](#installation) for how to depend on the beta.
+
+The **Asistan** tab turns a goal written in plain words into a verified flow:
+
+1. The tester writes a goal, for example *"Login with a wrong password should show an error"*.
+2. The assistant reads the current screen (the same list as the **Öğeler** tab) and either asks a
+   question (*"Which e-mail should I use?"*) or proposes one step, such as `type: email_field -> qa@example.com`.
+3. The tester taps **Çalıştır** (Run) or **Başka öner** (Suggest something else, with an optional reason).
+4. The step runs in the app. Only steps that pass are kept. Then the assistant reads the new screen
+   and proposes the next step, until it reaches and verifies the goal.
+5. **Editöre al** loads the flow into the editor. **Katalog kaydı** (Catalog entry) copies a ready
+   JSON entry to paste into your [scenario catalog](#scenario-catalog).
+
+### How it stays reliable with a small model
+
+- **Choices only from the screen:** the model's answer is constrained with guided generation, so
+  `action` can only be one of `tap`, `type`, `assertVisible`, `ask`, `finish`, `fail`, and `target`
+  can only be an element that is on screen right now. It can't invent identifiers or write invalid lines.
+- **One step at a time:** each turn starts a fresh session with a short summary (goal, answers, steps
+  so far, last problem, current screen), so the small context window (4,096 tokens on iOS 26) never
+  fills up.
+- **Everything is executed:** after each step the assistant waits 0.7 s for the screen to settle,
+  then looks again. After three failed steps in a row it stops and asks for a clearer goal.
+
+### Requirements
+
+The default model is Apple's on-device model (Foundation Models). It needs iOS 26 or later, a device
+that supports Apple Intelligence, and Apple Intelligence turned on. When the model isn't available,
+the tab explains why. On iOS 16–25 the tab is hidden. Turkish is among the supported languages.
+Everything runs on the device: no API key, no network, no cost.
+
+### Letting the assistant run tests on its own
+
+With **Otomatik ilerle** (Auto advance) on, the assistant doesn't wait for approval. It drives the app
+until it decides the goal is reached or impossible, so the model runs the test. This is useful for
+quick exploratory checks, but the verdict comes from a small model, runs aren't repeatable and they
+are slower. For regression tests, let the assistant write the flow once, save it to the catalog and
+run it deterministically from then on.
+
+### Using a different model
+
+Pass any type that conforms to `FlowAssistantModel`, for example a company proxy to a larger model or
+a model running on a Mac in the same network:
+
+```swift
+struct ProxyModel: FlowAssistantModel {
+    var availability: AssistantAvailability { .available }
+    func nextDecision(for context: AssistantContext) async throws -> AssistantDecision {
+        // Send context.prompt and context.targets to your service and map the reply.
+    }
+}
+
+.misterOTestPanel(assistantModel: ProxyModel())
+```
+
+With a remote model, the screen's element names and the tester's answers leave the device.
+
+### Status
+
+- The assistant loop (questions, approval, rejection, auto mode, failure limit, catalog export) is
+  covered by unit tests with a scripted model.
+- The Asistan tab was checked end to end on the iOS 27 simulator with the demo's rule-based model
+  (`MISTERO_ASSISTANT=demo`): question → answer → four approved steps → finish → catalog entry.
+- The generation schema is validated by a unit test that doesn't need the model. Two integration
+  tests call the real Apple model and are skipped when it isn't ready. On the machine used for
+  development the model was not ready yet, so they have not run yet.
+- The iOS Simulator reports the model as available, but generation fails with "Simulator is not
+  supported" from Apple's safety filter. Try the real model on a device (the tab shows a clear
+  message on the simulator).
+
 ## Making your app testable
 
 Identifiers make flows stable across copy changes and localizations:
@@ -292,6 +374,7 @@ language changes.
     initialScript: "tap: \"login_button\"",          // shown the first time the panel opens
     scenarios: .bundled("mistero-scenarios"),        // scenario catalog (see above)
     resetApp: { router.path = [] },                  // runs before each scenario
+    assistantModel: nil,                             // nil = Apple on-device model on iOS 26+
     configuration: .init(
         elementTimeout: .seconds(8),                 // wait per element (default 5 s)
         pollInterval: .milliseconds(200),            // how often to look again
@@ -302,7 +385,7 @@ language changes.
 )
 ```
 
-`MisterO.install(in:initialScript:scenarios:resetApp:configuration:enablesSwiftUIAccessibility:)`
+`MisterO.install(in:initialScript:scenarios:resetApp:assistantModel:configuration:enablesSwiftUIAccessibility:)`
 takes the same parameters. `MisterO.uninstall()` removes the panel and restores the accessibility setting.
 
 ## Running flows from code
@@ -339,7 +422,10 @@ MisterOCore  (Foundation only, unit-tested on macOS)
 ├── InAppTestRunner     @MainActor async/await engine: order, waiting, timeouts, cancel, report
 ├── UIDriver            protocol the runner uses to talk to the screen
 ├── ScenarioFeed        where the scenario catalog comes from (remote, bundled, inline, custom)
-└── ScenarioStore       loads, caches and checks the catalog; runs one scenario or a suite
+├── ScenarioStore       loads, caches and checks the catalog; runs one scenario or a suite
+├── FlowAssistant       goal → verified flow, one executed step at a time
+├── FlowAssistantModel  protocol for the language model behind the assistant
+└── AppleFlowAssistantModel  Apple on-device model with guided generation (iOS 26+)
 
 MisterO  (UIKit + SwiftUI)
 ├── UIKitDriver         UIDriver = ViewResolver + ActionExecutor
@@ -391,8 +477,9 @@ use the same approach.
   can't be triggered with public APIs. The step fails as "not tappable".
 - **No real touches:** an action still runs if another view covers the element. On ties the
   frontmost element is chosen, but no hit-test check is done.
-- **Out-of-process UI:** system permission alerts, the keyboard itself, share sheet contents and
-  web content inside `WKWebView` can't be reached.
+- **Out-of-process UI:** system permission alerts, the "Save Password?" prompt after a login, the
+  keyboard itself, share sheet contents and web content inside `WKWebView` can't be reached. Such
+  prompts don't block programmatic steps, but testers may need to dismiss them by hand.
 - **Tested so far:** on the iOS 27 simulator, the demo flow passes end to end with SwiftUI
   `TextField` / `SecureField` / `Button` / `NavigationLink` and UIKit `UITextField` /
   `UIButton(primaryAction:)`. A four-scenario suite with `resetApp`, a remote catalog and the
@@ -416,7 +503,8 @@ xcodebuild test -scheme MisterO -destination 'platform=iOS Simulator,name=iPhone
 A demo app with a SwiftUI login screen and a UIKit screen lives in `Examples/MisterODemo`. It ships
 a four-scenario catalog (`Sources/mistero-scenarios.json`, one of which fails on purpose) and a
 `resetApp` handler. Set the `MISTERO_SCENARIOS_URL` environment variable to load the catalog from a URL
-instead:
+instead. Set `MISTERO_ASSISTANT=demo` to try the Asistan tab with a rule-based stand-in model where
+the Apple model isn't available:
 
 ```bash
 open Examples/MisterODemo/MisterODemo.xcodeproj

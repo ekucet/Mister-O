@@ -23,12 +23,16 @@ public enum MisterO {
     public private(set) static var runner: InAppTestRunner?
     /// Senaryo kataloğu ve toplu koşular.
     public private(set) static var scenarios: ScenarioStore?
+    /// Akış oluşturan asistan (dil modeli yoksa `nil`).
+    public private(set) static var assistant: FlowAssistant?
     private static var overlay: OverlayWindow?
 
     /// - Parameters:
     ///   - scenarios: Testçinin panelde göreceği senaryo kataloğunun kaynağı.
     ///   - resetApp: Her senaryodan önce uygulamayı başlangıç durumuna getirir (navigasyonu köke al,
     ///     oturumu kapat…). Verilmezse senaryolar bir öncekinin bıraktığı ekrandan devam eder.
+    ///   - assistantModel: Asistan sekmesinin dil modeli. Verilmezse iOS 26+'da Apple'ın cihaz içi modeli
+    ///     kullanılır; daha eski sistemlerde sekme görünmez.
     ///   - enablesSwiftUIAccessibility: SwiftUI öğelerini bulabilmek için uygulama erişilebilirliğini
     ///     açar (private API, ayrıntı `AccessibilityBootstrap`'ta). Yalnızca UIKit ekranlarınız varsa `false` verin.
     public static func install(
@@ -36,6 +40,7 @@ public enum MisterO {
         initialScript: String = SampleFlow.starter,
         scenarios feed: ScenarioFeed? = nil,
         resetApp: (@MainActor () async -> Void)? = nil,
+        assistantModel: (any FlowAssistantModel)? = nil,
         configuration: InAppTestRunner.Configuration = .default,
         enablesSwiftUIAccessibility: Bool = true
     ) {
@@ -47,6 +52,7 @@ public enum MisterO {
         let driver = UIKitDriver()
         let runner = InAppTestRunner(driver: driver, configuration: configuration)
         let store = ScenarioStore(feed: feed, runner: runner, resetApp: resetApp)
+        let assistant = makeAssistant(model: assistantModel, runner: runner, resolver: driver.resolver)
         let panel = PanelModel()
         let window = OverlayWindow(windowScene: scene, panel: panel)
 
@@ -57,7 +63,8 @@ public enum MisterO {
         }
 
         let host = UIHostingController(rootView: TestPanelView(
-            runner: runner, scenarios: store, panel: panel, resolver: driver.resolver, initialScript: initialScript
+            runner: runner, scenarios: store, panel: panel, assistant: assistant, resolver: driver.resolver,
+            initialScript: initialScript
         ))
         host.view.backgroundColor = .clear
         window.rootViewController = host
@@ -65,6 +72,7 @@ public enum MisterO {
 
         self.runner = runner
         self.scenarios = store
+        self.assistant = assistant
         self.overlay = window
 
         if feed != nil {
@@ -74,12 +82,30 @@ public enum MisterO {
 
     public static func uninstall() {
         AccessibilityBootstrap.uninstall()
+        assistant?.stop()
         scenarios?.cancel()
         runner?.cancel()
         overlay?.isHidden = true
         overlay = nil
         runner = nil
         scenarios = nil
+        assistant = nil
+    }
+
+    private static func makeAssistant(
+        model: (any FlowAssistantModel)?,
+        runner: InAppTestRunner,
+        resolver: ViewResolver
+    ) -> FlowAssistant? {
+        if let model {
+            return FlowAssistant(model: model, runner: runner, screen: { resolver.screenElements() })
+        }
+        #if canImport(FoundationModels)
+        if #available(iOS 26.0, *) {
+            return FlowAssistant(model: AppleFlowAssistantModel(), runner: runner, screen: { resolver.screenElements() })
+        }
+        #endif
+        return nil
     }
 }
 
@@ -102,12 +128,14 @@ public extension View {
         initialScript: String = SampleFlow.starter,
         scenarios: ScenarioFeed? = nil,
         resetApp: (@MainActor () async -> Void)? = nil,
+        assistantModel: (any FlowAssistantModel)? = nil,
         configuration: InAppTestRunner.Configuration = .default,
         enablesSwiftUIAccessibility: Bool = true
     ) -> some View {
         background(SceneHook { scene in
             MisterO.install(in: scene, initialScript: initialScript, scenarios: scenarios, resetApp: resetApp,
-                            configuration: configuration, enablesSwiftUIAccessibility: enablesSwiftUIAccessibility)
+                            assistantModel: assistantModel, configuration: configuration,
+                            enablesSwiftUIAccessibility: enablesSwiftUIAccessibility)
         })
     }
 }
