@@ -1,0 +1,37 @@
+name: MisterODemo
+options:
+  bundleIdPrefix: app.mistero
+  deploymentTarget:
+    iOS: "17.0"
+configs:
+  Debug: debug
+  Staging: release
+  Release: release
+packages:
+  MisterO:
+    path: ../..
+targets:
+  MisterODemo:
+    type: application
+    platform: iOS
+    sources: [Sources]
+    dependencies:
+      - package: MisterO
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.mistero.demo
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
+        SWIFT_VERSION: "6.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_STYLE: Automatic
+      configs:
+        # Panel yalnızca MISTERO bayrağı olan derlemelerde kurulur.
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "DEBUG MISTERO"
+        Staging:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: "STAGING MISTERO"
