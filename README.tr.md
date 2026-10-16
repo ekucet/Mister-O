@@ -51,13 +51,14 @@ SDK, SwiftUI öğelerini görebilmek için private bir API kullanır (bkz. [Swif
 bu yüzden App Store derlemesine kesinlikle girmemelidir.
 
 **Xcode:** *File → Add Package Dependencies…* → `https://github.com/ekucet/Mister-O.git` →
-`MisterO` kütüphanesini yalnızca staging hedefine ekleyin.
+*Dependency Rule* olarak `0.1.0`'dan itibaren *Up to Next Major Version* seçin → `MisterO`
+kütüphanesini yalnızca staging hedefine ekleyin.
 
 **Package.swift:**
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/ekucet/Mister-O.git", branch: "main"),
+    .package(url: "https://github.com/ekucet/Mister-O.git", from: "0.1.0"),
 ],
 targets: [
     .target(name: "MyAppStaging", dependencies: [
