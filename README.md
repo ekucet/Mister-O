@@ -21,10 +21,11 @@ wait: 1.5
 ```
 
 <p align="center">
-  <img src="docs/images/scenarios.png" width="200" alt="Scenario catalog after a suite run">
-  <img src="docs/images/elements.png" width="200" alt="Elements tab listing on-screen identifiers">
-  <img src="docs/images/passed.png" width="200" alt="A passing run">
-  <img src="docs/images/failed.png" width="200" alt="A failing step with its error message">
+  <img src="docs/images/assistant.png" width="160" alt="Assistant report with a bug found and a ticket opened">
+  <img src="docs/images/scenarios.png" width="160" alt="Scenario catalog after a suite run">
+  <img src="docs/images/elements.png" width="160" alt="Elements tab listing on-screen identifiers">
+  <img src="docs/images/passed.png" width="160" alt="A passing run">
+  <img src="docs/images/failed.png" width="160" alt="A failing step with its error message">
 </p>
 
 ## Features
@@ -34,9 +35,12 @@ wait: 1.5
   the app. Testers pick from a list and run one scenario, a tag or all of them with one tap.
 - **SwiftUI and UIKit.** Finds SwiftUI `Button`, `TextField`, `SecureField`, `NavigationLink` and
   UIKit controls by `accessibilityIdentifier`, label or visible text.
-- **Flow assistant (AI).** Describe what to test in plain words. An on-device model looks at the
-  screen, asks for missing details, proposes one step at a time and runs it to check it works.
-  Prototype; see [Flow assistant](#flow-assistant-ai).
+- **AI test assistant.** Tap "Test this screen", or describe a check in plain words ("fill the fields
+  and tap Continue; it should move on"). An on-device model runs it, fills forms with realistic data,
+  reports issues with a ready bug report, and saves passing checks as draft scenarios. It can also
+  repair a failing scenario. Beta; see [AI test assistant](#ai-test-assistant).
+- **Tickets in one tap.** Plug in your tracker (Jira, Linear, GitHub Issues…) and a found issue
+  becomes a ticket with steps, expected and actual result and the device.
 - **Waits for you.** `tap`, `type` and `assertVisible` wait until the element shows up or becomes
   enabled, so flows don't need sleeps after every navigation.
 - **Clear results.** Each step is shown as passed, failed or skipped, with its line number,
@@ -76,10 +80,10 @@ targets: [
 ]
 ```
 
-> **Beta:** the [flow assistant](#flow-assistant-ai) is in `0.3.0-beta.1`. Swift Package Manager never
+> **Beta:** the [AI test assistant](#ai-test-assistant) is in `0.3.0-beta.2`. Swift Package Manager never
 > picks a pre-release from `from:`, so ask for it explicitly:
-> `.package(url: "https://github.com/ekucet/Mister-O.git", exact: "0.3.0-beta.1")`.
-> In Xcode, set *Dependency Rule* to *Exact Version* `0.3.0-beta.1`.
+> `.package(url: "https://github.com/ekucet/Mister-O.git", exact: "0.3.0-beta.2")`.
+> In Xcode, set *Dependency Rule* to *Exact Version* `0.3.0-beta.2`.
 
 Then add a compilation condition to the staging build, for example `STAGING` in
 *Build Settings → Active Compilation Conditions*.
@@ -126,12 +130,20 @@ Run the app and a test tube bubble appears at the screen edge.
 
 ## Using the panel
 
-If you set up a [scenario catalog](#scenario-catalog), the panel opens on **Senaryolar**
-(Scenarios). The editor below is for quick, one-off flows.
+The panel has three tabs:
+
+| Tab | What it's for |
+|---|---|
+| **Asistan** (Assistant) | Let the [AI test assistant](#ai-test-assistant) test the current screen or a check you describe |
+| **Senaryolar** (Scenarios) | Run the [scenario catalog](#scenario-catalog) and the drafts the assistant saved |
+| **Gelişmiş** (Advanced) | Write a flow by hand, read the run log and inspect the elements on screen |
+
+It opens on Asistan when the assistant's model is available, otherwise on Senaryolar if you set up a
+catalog, otherwise on Gelişmiş. Writing a flow by hand on the Gelişmiş tab:
 
 1. **Open:** tap the bubble. You can drag it to either edge.
 2. **Write:** type the flow into the editor. The last flow is saved and comes back on the next launch.
-3. **Find identifiers:** switch to **Öğeler** (Elements) to see what's on the current screen.
+3. **Find identifiers:** switch from **Log** to **Öğeler** (Elements) to see what's on the current screen.
    Tap a row to add a `tap`, `assertVisible` or `type` line for it.
 4. **Run:** tap **Çalıştır** (Run). The flow is checked first. If a line has a mistake, nothing
    runs and the error is shown with its line number.
@@ -148,6 +160,9 @@ If you set up a [scenario catalog](#scenario-catalog), the panel opens on **Sena
 | `type` | `type: "email_field" -> "hello"` | Clears the field, then types the text. `""` only clears it |
 | `wait` | `wait: 2` | Waits for the given number of seconds (0–300, `1.5` or `1,5`) |
 | `assertVisible` | `assertVisible: "welcome_label"` | Checks that the element is visible |
+| `assertNotVisible` | `assertNotVisible: "error_label"` | Checks that the element is gone (waits for it to disappear) |
+| `assertEnabled` | `assertEnabled: "save_button"` | Checks that the element is enabled |
+| `assertDisabled` | `assertDisabled: "login_button"` | Checks that the element is disabled |
 
 **Syntax rules**
 
@@ -198,6 +213,9 @@ What the tester does:
 5. When the run ends, the panel shows a summary such as `17/20 başarılı · 3 başarısız · 2 dk 14 sn`
    (17/20 passed · 3 failed · 2 min 14 s). Failed rows show their first error. Tap a row to see its
    steps, or **Editöre al** to load it into the editor. The copy button copies the whole suite report.
+6. If a scenario broke because the screen changed (a renamed button, a new field), **Asistanla onar**
+   (Repair with assistant) on the failed row hands it to the assistant. See
+   [Repairing a failing scenario](#repairing-a-failing-scenario).
 
 A failing scenario stops at its first failed step, and the suite moves on to the next scenario.
 
@@ -211,6 +229,7 @@ A failing scenario stops at its first failed step, and the suite moves on to the
       "name": "Successful login",
       "description": "Signs in with a valid account and checks the home screen.",
       "tags": ["smoke", "auth"],
+      "goal": "Sign in with the test account; the home screen should open.",
       "steps": [
         "type: email_field -> tester@example.com",
         "type: password_field -> 123456",
@@ -235,6 +254,7 @@ A failing scenario stops at its first failed step, and the suite moves on to the
 | `description` | no | Short explanation under the name |
 | `tags` | no | Used to filter and to run a subset |
 | `reset` | no | `false` skips `resetApp` before this scenario. Default `true` |
+| `goal` | no | What the scenario should prove, in plain words. The assistant uses it to repair the scenario when its steps stop working |
 
 Inside JSON strings, use bare values (`tap: login_button`) or single quotes (`'Welcome, …'`) so you
 don't have to escape `"`. The catalog is checked when it loads. A scenario with a syntax error is
@@ -273,57 +293,193 @@ signing out:
 After the reset, Mister-O waits 0.6 s for the screen to settle. If you don't provide `resetApp`,
 order the catalog so that each scenario continues from where the previous one ended.
 
-## Flow assistant (AI)
+## AI test assistant
 
-> **Prototype, in `0.3.0-beta.1`.** The panel and the assistant loop are tested, but the Apple
-> on-device model has not yet been run end to end (see [Status](#status)). See
-> [Installation](#installation) for how to depend on the beta.
+> **Beta.** The assistant loop, the report and the demo flow are tested. Apple's on-device model has
+> not yet been run end to end on a device (see [Status](#status)).
 
-The **Asistan** tab turns a goal written in plain words into a verified flow:
+Open the panel on any screen and switch to **Asistan**. There are two ways to start:
 
-1. The tester writes a goal, for example *"Login with a wrong password should show an error"*.
-2. The assistant reads the current screen (the same list as the **Öğeler** tab) and either asks a
-   question (*"Which e-mail should I use?"*) or proposes one step, such as `type: email_field -> qa@example.com`.
-3. The tester taps **Çalıştır** (Run) or **Başka öner** (Suggest something else, with an optional reason).
-4. The step runs in the app. Only steps that pass are kept. Then the assistant reads the new screen
-   and proposes the next step, until it reaches and verifies the goal.
-5. **Editöre al** loads the flow into the editor. **Katalog kaydı** (Catalog entry) copies a ready
-   JSON entry to paste into your [scenario catalog](#scenario-catalog).
+- **Bu ekranı test et** (Test this screen): the assistant looks at the elements on the screen and plans
+  up to four checks itself, for example *"An empty form shouldn't sign in"*, *"Invalid details
+  shouldn't sign in"* and *"Valid details should sign in"*. You can give it a focus first, for example
+  *"only the password field"*.
+- **Describe a check** in the *ya da tarif edin…* (or describe…) field, in your own words:
+  *"Fill in the fields and tap Continue; it should go to the next screen, otherwise fail."*
+  The part that says what should happen (*-malı/-meli* in Turkish, *should/must* in English) becomes
+  the expected result. The assistant fills the fields with data that fits each one, taps, and checks
+  the result. You don't need to write a flow for this.
+
+Then:
+
+1. The assistant runs the checks by itself while the panel shrinks to a progress bubble. Before each
+   check it goes back to the starting screen by closing sheets and popping navigation, with `resetApp`
+   as a last resort.
+2. You get a short report, for example `3 checks · 2 passed · 1 issue`.
+3. You continue from the report:
+   - **Issue:** **Kayıt aç (Jira)** (Open ticket) opens a ticket in your tracker if you
+     [connected one](#opening-tickets-jira-linear-github-issues). **Hata kaydı** (Bug report) copies
+     the steps, expected and actual result and the device; **Paylaş** (Share) sends them anywhere.
+   - **Needs info:** the assistant asks for data it can't make up, for example *"Can you give me a
+     valid e-mail and password?"* Answer, and the check runs again. Your answer is remembered.
+   - **Passed:** **Taslağa kaydet** (Save as draft) turns the check into a draft scenario. Drafts appear
+     in the Senaryolar tab right away and can be shared with your QA lead as catalog JSON.
+   - **Şunu da dene** (Try this too): describe another check and the assistant runs it.
+
+On the demo's login screen the assistant finds a real bug in the demo app: the e-mail check only looks
+for "@", so "a@" signs in. The demo passes its test account as [`testData`](#test-data-and-what-the-assistant-remembers),
+so the assistant never has to ask:
+
+```
+Mister-O asistan raporu · 3 kontrol · 2 geçti · 1 sorun
+✓ Boş formla “Giriş Yap” çalışmamalı
+    Boş formda Giriş Yap pasif kalıyor.
+✗ Geçersiz bilgilerle “Giriş Yap” çalışmamalı
+    Geçersiz e-postayla (a@) giriş yapılabildi; ana sayfa açıldı.
+✓ Geçerli bilgilerle “Giriş Yap” çalışmalı
+    Giriş yapıldı, ana sayfa açıldı.
+```
+
+### Test data and what the assistant remembers
+
+The assistant fills ordinary fields itself with realistic data. Mister-O tells it what kind of input
+each text field expects, read from `textContentType`, `keyboardType` and `isSecureTextEntry`: `email`,
+`password`, `phone`, `number`, `name`, `username`, `code`, `url`, `postal code`, `address` or `text`.
+A sign-up form gets a unique address such as `qa+4821@example.com`; a negative check gets values like
+`a@` on purpose.
+
+It only asks for data that must already exist in your system: an existing account and its password, a
+verification code, an order number. Give that up front with `testData`:
+
+```swift
+.misterOTestPanel(
+    testData: [
+        "Test account e-mail": "qa@acme.com",
+        "Test account password": "…",
+    ]
+)
+```
+
+The keys are descriptions the model reads, the values are what it types. They're listed under
+**Bildiklerim** (What I know) with a lock icon. Answers testers give in the chat are stored in the
+device's Keychain and reused in later checks and after relaunches. **Unut** (Forget) removes one,
+**Hepsini unut** (Forget all) removes every answer. Anything in `testData` ships inside the staging
+build, so use test accounts only.
+
+### Repairing a failing scenario
+
+When a scenario fails, for example because a button was renamed or a field was added, its row in the
+Senaryolar tab shows **Asistanla onar** (Repair with assistant). The assistant gets the scenario's
+`goal` (or its name and description) with the old steps as a hint, resets the app if the scenario
+uses `resetApp`, and tries to reach the goal on the current screen.
+
+If the check passes, **Senaryoyu güncelle** (Update scenario) saves the new steps. A draft is updated
+in place. A catalog scenario gets a draft copy named "… (onarıldı)" and tagged `onarıldı` (repaired),
+because the catalog itself lives in your repository: share it with **Taslakları paylaş** (Share drafts)
+and merge it into the catalog. If the check reports an issue instead, the scenario probably caught a real
+bug, and you can open a ticket from the report.
+
+### Opening tickets (Jira, Linear, GitHub Issues…)
+
+Pass an `issueReporter`, and every issue in the report gets a **Kayıt aç** (Open ticket) button. The
+key and link of the opened ticket appear in the report, for example *Kayıt açıldı: QA-42*. Each issue
+is opened once; if it fails, the error is shown and the tester can tap again.
+
+The built-in `WebhookIssueReporter` posts the bug report as JSON to a URL you choose:
+
+```swift
+.misterOTestPanel(
+    issueReporter: WebhookIssueReporter(
+        name: "Jira",                                        // button title: "Kayıt aç (Jira)"
+        url: URL(string: "https://hooks.example.com/mistero")!,
+        headers: ["Authorization": "Bearer …"]               // optional
+    )
+)
+```
+
+```json
+{
+  "title": "Geçersiz bilgilerle “Giriş Yap” çalışmamalı: beklenen davranış görülmedi",
+  "steps": ["type: email_field -> a@", "type: password_field -> 123456", "tap: login_button"],
+  "expected": "Hata görünmeli ya da “Giriş Yap” pasif kalmalı; ekran değişmemeli.",
+  "actual": "Geçersiz e-postayla (a@) giriş yapılabildi; ana sayfa açıldı.",
+  "environment": "iPhone (Simülatör) · iOS 27.0 · app.mistero.demo 1.0 (1)",
+  "description": "The same report as plain text, ready for the ticket body"
+}
+```
+
+If the response is JSON with `key` and `url` (or Jira's `self`), the report links to the ticket.
+Where to point the webhook:
+
+- **Jira:** an Automation rule with the *Incoming webhook* trigger and a *Create issue* action that
+  uses `{{webhookData.title}}` and `{{webhookData.description}}`. Automation answers before the rule
+  runs, so the report says *Kayıt açıldı* without a key.
+- **Zapier, Make or n8n:** a webhook trigger that creates the issue in Linear, GitHub Issues, Azure
+  DevOps or anywhere else.
+- **Your own backend:** creates the ticket with the tracker's API and returns `{"key": …, "url": …}`.
+
+A webhook keeps tracker credentials out of the app: anything in a staging build can be extracted, and
+the webhook can only create tickets. To call a tracker directly, conform to `IssueReporter`:
+
+```swift
+struct LinearReporter: IssueReporter {
+    let name = "Linear"
+
+    func open(_ report: BugReport) async throws -> IssueReceipt {
+        // Create the issue from report.title and report.text, then return its key and link.
+    }
+}
+```
+
+Without an `issueReporter`, testers still have **Hata kaydı** and **Paylaş**.
 
 ### How it stays reliable with a small model
 
-- **Choices only from the screen:** the model's answer is constrained with guided generation, so
-  `action` can only be one of `tap`, `type`, `assertVisible`, `ask`, `finish`, `fail`, and `target`
-  can only be an element that is on screen right now. It can't invent identifiers or write invalid lines.
-- **One step at a time:** each turn starts a fresh session with a short summary (goal, answers, steps
-  so far, last problem, current screen), so the small context window (4,096 tokens on iOS 26) never
-  fills up.
-- **Everything is executed:** after each step the assistant waits 0.7 s for the screen to settle,
-  then looks again. After three failed steps in a row it stops and asks for a clearer goal.
+- **Choices only from the screen:** guided generation limits the action to `tap`, `type`, the four
+  `assert…` commands, `ask`, `pass`, `issue` and `blocked`, and the target to elements that are on
+  screen right now. The model can't invent identifiers or write invalid lines.
+- **It sees state:** each element comes with its kind, whether it is disabled and, for text fields,
+  its current value.
+- **One step at a time:** every turn starts a fresh session with a short summary, so the small context
+  window (4,096 tokens on iOS 26) never fills up.
+- **Everything is executed:** each step really runs. Failures are fed back to the model, a check stops
+  after three failed steps in a row or eight steps in total, and the screen gets 0.7 s to settle after
+  every step.
+- **A fallback plan:** if the model returns no plan, or a custom model doesn't plan, a rule-based
+  planner proposes the usual form checks.
+
+### Drafts and resets
+
+A saved check becomes a draft scenario tagged `taslak` and `asistan`. If the test started on the app's
+root screen and you provided `resetApp`, the draft resets the app before it runs. Otherwise it is marked
+"reset yok" (no reset) and should be run from the screen it was recorded on. The check's description is
+kept as the draft's `goal`, so the draft can be [repaired](#repairing-a-failing-scenario) later.
 
 ### Requirements
 
 The default model is Apple's on-device model (Foundation Models). It needs iOS 26 or later, a device
 that supports Apple Intelligence, and Apple Intelligence turned on. When the model isn't available,
-the tab explains why. On iOS 16–25 the tab is hidden. Turkish is among the supported languages.
-Everything runs on the device: no API key, no network, no cost.
-
-### Letting the assistant run tests on its own
-
-With **Otomatik ilerle** (Auto advance) on, the assistant doesn't wait for approval. It drives the app
-until it decides the goal is reached or impossible, so the model runs the test. This is useful for
-quick exploratory checks, but the verdict comes from a small model, runs aren't repeatable and they
-are slower. For regression tests, let the assistant write the flow once, save it to the catalog and
-run it deterministically from then on.
+the tab explains why. Turkish is among the supported languages. Everything runs on the device: no API
+key, no network, no cost.
 
 ### Using a different model
 
-Pass any type that conforms to `FlowAssistantModel`, for example a company proxy to a larger model or
-a model running on a Mac in the same network:
+Pass any type that conforms to `FlowAssistantModel`, for example a company proxy to a larger model.
+`plan(for:)` and `check(for:context:)` are optional; without them the rule-based planner plans the
+screen and turns a described check into a title and an expected result.
 
 ```swift
 struct ProxyModel: FlowAssistantModel {
     var availability: AssistantAvailability { .available }
+
+    func plan(for context: PlanContext) async throws -> [PlannedCheck] {
+        // Send context.prompt to your service and map the reply.
+    }
+
+    func check(for request: String, context: PlanContext) async throws -> PlannedCheck {
+        // Turn the tester's sentence into a title and an expected result.
+    }
+
     func nextDecision(for context: AssistantContext) async throws -> AssistantDecision {
         // Send context.prompt and context.targets to your service and map the reply.
     }
@@ -336,16 +492,17 @@ With a remote model, the screen's element names and the tester's answers leave t
 
 ### Status
 
-- The assistant loop (questions, approval, rejection, auto mode, failure limit, catalog export) is
-  covered by unit tests with a scripted model.
-- The Asistan tab was checked end to end on the iOS 27 simulator with the demo's rule-based model
-  (`MISTERO_ASSISTANT=demo`): question → answer → four approved steps → finish → catalog entry.
-- The generation schema is validated by a unit test that doesn't need the model. Two integration
-  tests call the real Apple model and are skipped when it isn't ready. On the machine used for
-  development the model was not ready yet, so they have not run yet.
+- The assistant (planning order, issues, questions and re-runs, returning to the start screen, stopping,
+  bug reports, drafts, described checks, remembered facts, repairs, opening tickets) is covered by unit
+  tests with a scripted model.
+- On the iOS 27 simulator, the demo's rule-based model (`MISTERO_ASSISTANT=demo`) ran the whole loop:
+  three checks with no questions thanks to `testData`, the "a@" bug found and turned into a ticket
+  through a local webhook, a described "fill the fields and continue" check, drafts saved and run, and a
+  failing catalog scenario repaired into an "(onarıldı)" draft.
+- Parsing Apple's answers and building its schemas is unit-tested without the model. Two integration
+  tests call the real model and are skipped when it isn't available.
 - The iOS Simulator reports the model as available, but generation fails with "Simulator is not
-  supported" from Apple's safety filter. Try the real model on a device (the tab shows a clear
-  message on the simulator).
+  supported" from Apple's safety filter, so the real model has to be tried on a device.
 
 ## Making your app testable
 
@@ -375,6 +532,8 @@ language changes.
     scenarios: .bundled("mistero-scenarios"),        // scenario catalog (see above)
     resetApp: { router.path = [] },                  // runs before each scenario
     assistantModel: nil,                             // nil = Apple on-device model on iOS 26+
+    testData: ["Test e-mail": "qa@acme.com"],        // data the assistant can't make up
+    issueReporter: WebhookIssueReporter(url: hook),  // "Kayıt aç" (Open ticket) on issues
     configuration: .init(
         elementTimeout: .seconds(8),                 // wait per element (default 5 s)
         pollInterval: .milliseconds(200),            // how often to look again
@@ -385,7 +544,7 @@ language changes.
 )
 ```
 
-`MisterO.install(in:initialScript:scenarios:resetApp:assistantModel:configuration:enablesSwiftUIAccessibility:)`
+`MisterO.install(in:initialScript:scenarios:resetApp:assistantModel:testData:issueReporter:configuration:enablesSwiftUIAccessibility:)`
 takes the same parameters. `MisterO.uninstall()` removes the panel and restores the accessibility setting.
 
 ## Running flows from code
@@ -423,15 +582,17 @@ MisterOCore  (Foundation only, unit-tested on macOS)
 ├── UIDriver            protocol the runner uses to talk to the screen
 ├── ScenarioFeed        where the scenario catalog comes from (remote, bundled, inline, custom)
 ├── ScenarioStore       loads, caches and checks the catalog; runs one scenario or a suite
-├── FlowAssistant       goal → verified flow, one executed step at a time
+├── FlowAssistant       plans checks for the screen, runs them, reports, continues with the tester
 ├── FlowAssistantModel  protocol for the language model behind the assistant
-└── AppleFlowAssistantModel  Apple on-device model with guided generation (iOS 26+)
+├── AppleFlowAssistantModel  Apple on-device model with guided generation (iOS 26+)
+└── IssueReporter       turns a found issue into a ticket (WebhookIssueReporter built in)
 
 MisterO  (UIKit + SwiftUI)
 ├── UIKitDriver         UIDriver = ViewResolver + ActionExecutor
 ├── ViewResolver        walks the UIWindow hierarchy recursively, matches and ranks elements
 ├── ActionExecutor      performs tap / type through public UIKit APIs
 ├── AccessibilityBootstrap  makes SwiftUI elements visible to the resolver
+├── ScreenAnchor        brings the assistant back to its start screen; Keychain memory for answers
 └── Panel               SwiftUI panel in a separate overlay window
 ```
 
@@ -504,7 +665,8 @@ A demo app with a SwiftUI login screen and a UIKit screen lives in `Examples/Mis
 a four-scenario catalog (`Sources/mistero-scenarios.json`, one of which fails on purpose) and a
 `resetApp` handler. Set the `MISTERO_SCENARIOS_URL` environment variable to load the catalog from a URL
 instead. Set `MISTERO_ASSISTANT=demo` to try the Asistan tab with a rule-based stand-in model where
-the Apple model isn't available:
+the Apple model isn't available, and `MISTERO_ISSUE_WEBHOOK` to a URL to try **Kayıt aç** against your
+own webhook:
 
 ```bash
 open Examples/MisterODemo/MisterODemo.xcodeproj

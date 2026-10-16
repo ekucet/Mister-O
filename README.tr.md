@@ -21,10 +21,11 @@ wait: 1.5
 ```
 
 <p align="center">
-  <img src="docs/images/scenarios.png" width="200" alt="Suite koşusundan sonra senaryo kataloğu">
-  <img src="docs/images/elements.png" width="200" alt="Ekrandaki id'leri listeleyen Öğeler sekmesi">
-  <img src="docs/images/passed.png" width="200" alt="Başarılı bir koşu">
-  <img src="docs/images/failed.png" width="200" alt="Hata mesajıyla başarısız bir adım">
+  <img src="docs/images/assistant.png" width="160" alt="Hata bulup kayıt açan asistan raporu">
+  <img src="docs/images/scenarios.png" width="160" alt="Suite koşusundan sonra senaryo kataloğu">
+  <img src="docs/images/elements.png" width="160" alt="Ekrandaki id'leri listeleyen Öğeler sekmesi">
+  <img src="docs/images/passed.png" width="160" alt="Başarılı bir koşu">
+  <img src="docs/images/failed.png" width="160" alt="Hata mesajıyla başarısız bir adım">
 </p>
 
 ## Özellikler
@@ -35,9 +36,13 @@ wait: 1.5
   da hepsini tek dokunuşla çalıştırır.
 - **SwiftUI ve UIKit.** SwiftUI `Button`, `TextField`, `SecureField`, `NavigationLink` ve UIKit
   kontrollerini `accessibilityIdentifier`, label ya da görünen metinle bulur.
-- **Akış asistanı (yapay zekâ).** Neyi test edeceğinizi düz cümleyle yazarsınız. Cihaz içi model
-  ekrana bakar, eksik bilgiyi sorar, her seferinde tek bir adım önerir ve çalıştırarak doğrular.
-  Prototip; bkz. [Akış asistanı](#akış-asistanı-yapay-zekâ).
+- **Yapay zekâ test asistanı.** "Bu ekranı test et"e basarsınız ya da kontrolü düz cümleyle tarif
+  edersiniz ("alanları doldur, Devam'a bas; sonraki ekran açılmalı"). Cihaz içi model kontrolü koşar,
+  formları gerçekçi verilerle doldurur, sorunları hazır bir hata kaydıyla raporlar ve geçen kontrolleri
+  taslak senaryo olarak kaydeder. Bozulan bir senaryoyu onarabilir de. Beta; bkz.
+  [Yapay zekâ test asistanı](#yapay-zekâ-test-asistanı).
+- **Tek dokunuşla kayıt.** Takip aracınızı (Jira, Linear, GitHub Issues…) bağlarsanız bulunan sorun;
+  adımları, beklenen ve gerçekleşen sonucu ve cihaz bilgisiyle bir kayda dönüşür.
 - **Kendisi bekler.** `tap`, `type` ve `assertVisible` öğe ekrana gelene ya da aktif olana kadar
   bekler; her geçişten sonra `wait` yazmanız gerekmez.
 - **Net sonuç.** Her adım satır numarası, süresi ve hata mesajıyla Başarılı / Başarısız / Atlandı
@@ -74,10 +79,10 @@ targets: [
 ]
 ```
 
-> **Beta:** [Akış asistanı](#akış-asistanı-yapay-zekâ) `0.3.0-beta.1` sürümünde. Swift Package Manager
+> **Beta:** [Yapay zekâ test asistanı](#yapay-zekâ-test-asistanı) `0.3.0-beta.2` sürümünde. Swift Package Manager
 > `from:` ile asla ön sürüm (pre-release) seçmez; bu yüzden açıkça isteyin:
-> `.package(url: "https://github.com/ekucet/Mister-O.git", exact: "0.3.0-beta.1")`.
-> Xcode'da *Dependency Rule* olarak *Exact Version* `0.3.0-beta.1` seçin.
+> `.package(url: "https://github.com/ekucet/Mister-O.git", exact: "0.3.0-beta.2")`.
+> Xcode'da *Dependency Rule* olarak *Exact Version* `0.3.0-beta.2` seçin.
 
 Ardından staging derlemesine bir derleme koşulu ekleyin; örneğin *Build Settings → Active
 Compilation Conditions* içine `STAGING`.
@@ -124,12 +129,20 @@ Uygulamayı açtığınızda ekranın kenarında bir deney tüpü baloncuğu gö
 
 ## Panelin kullanımı
 
-Bir [senaryo kataloğu](#senaryo-kataloğu) tanımladıysanız panel **Senaryolar** sekmesiyle açılır.
-Aşağıdaki editör, anlık ve tek seferlik akışlar içindir.
+Panelde üç sekme var:
+
+| Sekme | Ne için |
+|---|---|
+| **Asistan** | [Yapay zekâ test asistanı](#yapay-zekâ-test-asistanı) o anki ekranı ya da tarif ettiğiniz kontrolü test eder |
+| **Senaryolar** | [Senaryo kataloğunu](#senaryo-kataloğu) ve asistanın kaydettiği taslakları çalıştırır |
+| **Gelişmiş** | Akışı elle yazar, koşu logunu okur ve ekrandaki öğeleri incelersiniz |
+
+Asistanın modeli kullanılabiliyorsa panel Asistan sekmesiyle; değilse katalog tanımlıysa Senaryolar,
+o da yoksa Gelişmiş sekmesiyle açılır. Gelişmiş sekmesinde akışı elle yazmak:
 
 1. **Aç:** baloncuğa dokunun. Baloncuğu iki kenardan birine sürükleyebilirsiniz.
 2. **Yaz:** akışı editöre yazın. Son yazılan akış kaydedilir ve uygulama yeniden açılınca geri gelir.
-3. **Id'leri bul:** **Öğeler** sekmesinde o anki ekrandaki öğeler listelenir. Bir satıra dokunup
+3. **Id'leri bul:** **Log**'dan **Öğeler**'e geçince o anki ekrandaki öğeler listelenir. Bir satıra dokunup
    onun için `tap`, `assertVisible` ya da `type` satırı ekleyebilirsiniz.
 4. **Çalıştır:** **Çalıştır**'a basın. Akış önce kontrol edilir; bir satırda hata varsa hiçbir
    adım çalışmaz ve hata satır numarasıyla gösterilir.
@@ -146,6 +159,9 @@ Aşağıdaki editör, anlık ve tek seferlik akışlar içindir.
 | `type` | `type: "email_field" -> "merhaba"` | Alanı temizleyip metni yazar; `""` yalnızca temizler |
 | `wait` | `wait: 2` | Verilen saniye kadar bekler (0–300, `1.5` ya da `1,5`) |
 | `assertVisible` | `assertVisible: "welcome_label"` | Öğenin görünür olduğunu doğrular |
+| `assertNotVisible` | `assertNotVisible: "error_label"` | Öğenin ekranda olmadığını doğrular (kaybolmasını bekler) |
+| `assertEnabled` | `assertEnabled: "save_button"` | Öğenin aktif olduğunu doğrular |
+| `assertDisabled` | `assertDisabled: "login_button"` | Öğenin pasif olduğunu doğrular |
 
 **Yazım kuralları**
 
@@ -197,6 +213,9 @@ Testçinin yaptığı:
 5. Koşu bitince panel `17/20 başarılı · 3 başarısız · 2 dk 14 sn` gibi bir özet gösterir. Başarısız
    satırlarda ilk hata yazar. Bir satıra dokununca adımları açılır; **Editöre al** onu editöre
    yükler. Kopyala butonu tüm suite raporunu kopyalar.
+6. Senaryo ekran değiştiği için bozulduysa (butonun adı değişti, yeni bir alan geldi) başarısız
+   satırdaki **Asistanla onar** onu asistana devreder. Bkz.
+   [Başarısız bir senaryoyu onarmak](#başarısız-bir-senaryoyu-onarmak).
 
 Başarısız bir senaryo ilk hatalı adımda durur, suite bir sonraki senaryoyla devam eder.
 
@@ -210,6 +229,7 @@ Başarısız bir senaryo ilk hatalı adımda durur, suite bir sonraki senaryoyla
       "name": "Başarılı giriş",
       "description": "Geçerli hesapla giriş yapar ve ana sayfayı doğrular.",
       "tags": ["smoke", "auth"],
+      "goal": "Test hesabıyla giriş yap; ana sayfa açılmalı.",
       "steps": [
         "type: email_field -> tester@example.com",
         "type: password_field -> 123456",
@@ -234,6 +254,7 @@ Başarısız bir senaryo ilk hatalı adımda durur, suite bir sonraki senaryoyla
 | `description` | hayır | Adın altında görünen kısa açıklama |
 | `tags` | hayır | Filtrelemek ve bir alt kümeyi çalıştırmak için |
 | `reset` | hayır | `false` ise bu senaryodan önce `resetApp` çağrılmaz. Varsayılan `true` |
+| `goal` | hayır | Senaryonun neyi kanıtlaması gerektiği, düz cümleyle. Adımlar artık çalışmadığında asistan senaryoyu buna göre onarır |
 
 JSON metinlerinin içinde `"` kaçışıyla uğraşmamak için tırnaksız değer (`tap: login_button`) ya da
 tek tırnak (`'Hoş geldin, …'`) kullanın. Katalog yüklenirken kontrol edilir. Yazım hatası olan
@@ -270,57 +291,193 @@ senaryoların beklediği duruma getirmelidir; örneğin navigasyonu köke almak 
 Reset'ten sonra Mister-O ekranın oturması için 0,6 sn bekler. `resetApp` vermezseniz kataloğu, her
 senaryo bir öncekinin bittiği yerden devam edecek şekilde sıralayın.
 
-## Akış asistanı (yapay zekâ)
+## Yapay zekâ test asistanı
 
-> **Prototip, `0.3.0-beta.1` sürümünde.** Panel ve asistan döngüsü test edildi; ancak Apple'ın cihaz
-> içi modeli henüz uçtan uca çalıştırılmadı (bkz. [Durum](#durum)). Beta'ya nasıl bağımlı olunacağı
-> için [Kurulum](#kurulum) bölümüne bakın.
+> **Beta.** Asistan döngüsü, rapor ve demo akışı test edildi. Apple'ın cihaz içi modeli henüz bir
+> cihazda uçtan uca çalıştırılmadı (bkz. [Durum](#durum)).
 
-**Asistan** sekmesi düz cümleyle yazılmış bir hedefi doğrulanmış bir akışa çevirir:
+Paneli herhangi bir ekranda açın ve **Asistan** sekmesine geçin. İki şekilde başlayabilirsiniz:
 
-1. Testçi hedefi yazar, örneğin *"Yanlış şifreyle girişte hata mesajı çıkmalı"*.
-2. Asistan o anki ekranı okur (**Öğeler** sekmesindeki listenin aynısı). Ya soru sorar (*"Hangi
-   e-posta ile gireyim?"*) ya da tek bir adım önerir, örneğin `type: email_field -> qa@firma.com`.
-3. Testçi **Çalıştır**'a ya da **Başka öner**'e basar; isterse nedenini de yazar.
-4. Adım uygulamada çalışır, yalnızca geçen adımlar akışa girer. Asistan yeni ekranı okuyup sıradaki
-   adımı önerir; hedefe ulaşıp doğrulayana kadar böyle devam eder.
-5. **Editöre al** akışı editöre yükler. **Katalog kaydı** ise [senaryo kataloğuna](#senaryo-kataloğu)
-   yapıştırılacak hazır bir JSON kaydını panoya kopyalar.
+- **Bu ekranı test et:** Asistan ekrandaki öğelere bakar ve en fazla dört kontrolü kendisi planlar;
+  örneğin *"Boş formla giriş yapılamamalı"*, *"Geçersiz bilgilerle giriş yapılamamalı"*, *"Geçerli
+  bilgilerle giriş yapılabilmeli"*. Önce bir odak da verebilirsiniz, örneğin *"sadece şifre alanı"*.
+- **Kontrolü tarif edin:** *ya da tarif edin…* alanına kendi cümlenizle yazın:
+  *"Alanları doldur, Devam'a bas; sonraki ekran açılmalı, açılmazsa fail."*
+  Ne olması gerektiğini söyleyen kısım (Türkçede *-malı/-meli*, İngilizcede *should/must*) beklenen
+  sonuç olur. Asistan alanları her birine uyan verilerle doldurur, butona basar ve sonucu doğrular.
+  Bunun için akış yazmanız gerekmez.
+
+Sonra:
+
+1. Asistan kontrolleri kendisi koşar; bu sırada panel bir ilerleme baloncuğuna küçülür. Her kontrolden
+   önce açık sayfaları kapatıp navigasyonu geri alarak başlangıç ekranına döner; son çare olarak
+   `resetApp`'i kullanır.
+2. Kısa bir rapor çıkar, örneğin `3 kontrol · 2 geçti · 1 sorun`.
+3. Raporla devam edersiniz:
+   - **Sorun:** Bir takip aracı [bağladıysanız](#kayıt-açmak-jira-linear-github-issues) **Kayıt aç (Jira)**
+     kaydı açar. **Hata kaydı** adımları, beklenen ve gerçekleşen sonucu ve cihaz bilgisini kopyalar;
+     **Paylaş** istediğiniz yere gönderir.
+   - **Bilgi bekliyor:** Asistan uyduramayacağı bir veriyi sorar, örneğin *"Geçerli bir e-posta ve
+     şifre verir misiniz?"* Cevap verince kontrol yeniden koşar; cevabınız hatırlanır.
+   - **Geçti:** **Taslağa kaydet** kontrolü taslak senaryoya çevirir. Taslaklar Senaryolar sekmesinde
+     hemen görünür ve QA lead'e katalog JSON'u olarak paylaşılabilir.
+   - **Şunu da dene:** Yeni bir kontrolü tarif edin, asistan onu da koşsun.
+
+Demo'nun giriş ekranında asistan, demo uygulamadaki gerçek bir hatayı buluyor: e-posta kontrolü
+yalnızca "@" işaretine baktığı için "a@" ile giriş yapılabiliyor. Demo test hesabını
+[`testData`](#test-verisi-ve-asistanın-hatırladıkları) olarak verdiği için asistanın soru sormasına
+gerek kalmıyor:
+
+```
+Mister-O asistan raporu · 3 kontrol · 2 geçti · 1 sorun
+✓ Boş formla “Giriş Yap” çalışmamalı
+    Boş formda Giriş Yap pasif kalıyor.
+✗ Geçersiz bilgilerle “Giriş Yap” çalışmamalı
+    Geçersiz e-postayla (a@) giriş yapılabildi; ana sayfa açıldı.
+✓ Geçerli bilgilerle “Giriş Yap” çalışmalı
+    Giriş yapıldı, ana sayfa açıldı.
+```
+
+### Test verisi ve asistanın hatırladıkları
+
+Asistan sıradan alanları gerçekçi verilerle kendisi doldurur. Mister-O her metin alanının ne tür bir
+girdi beklediğini `textContentType`, `keyboardType` ve `isSecureTextEntry`'den okuyup modele söyler:
+`email`, `password`, `phone`, `number`, `name`, `username`, `code`, `url`, `postal code`, `address` ya da
+`text`. Kayıt formuna `qa+4821@example.com` gibi benzersiz bir adres yazılır; olumsuz bir kontrolde ise
+bilerek `a@` gibi değerler denenir.
+
+Asistan yalnızca sisteminizde önceden var olması gereken verileri sorar: mevcut bir hesap ve şifresi,
+doğrulama kodu, sipariş numarası. Bunları baştan `testData` ile verin:
+
+```swift
+.misterOTestPanel(
+    testData: [
+        "Test hesabı e-postası": "qa@acme.com",
+        "Test hesabı şifresi": "…",
+    ]
+)
+```
+
+Anahtarlar modelin okuduğu açıklamalar, değerler yazacağı verilerdir. **Bildiklerim** altında kilit
+simgesiyle listelenirler. Testçinin sohbette verdiği cevaplar cihazın Keychain'inde saklanır; sonraki
+kontrollerde ve uygulama yeniden açıldığında da kullanılır. **Unut** birini, **Hepsini unut** tüm
+cevapları siler. `testData`'daki her şey staging derlemesinin içine girer; yalnızca test hesapları
+kullanın.
+
+### Başarısız bir senaryoyu onarmak
+
+Bir senaryo, örneğin bir butonun adı değiştiği ya da yeni bir alan eklendiği için başarısız olursa
+Senaryolar sekmesindeki satırında **Asistanla onar** çıkar. Asistan senaryonun `goal` alanını (yoksa
+adını ve açıklamasını) ve ipucu olarak eski adımları alır; senaryo `resetApp` kullanıyorsa uygulamayı
+reset'ler ve amaca o anki ekranda ulaşmaya çalışır.
+
+Kontrol geçerse **Senaryoyu güncelle** yeni adımları kaydeder. Taslak olduğu yerde güncellenir.
+Katalogdaki bir senaryo içinse "… (onarıldı)" adında, `onarıldı` etiketli bir taslak kopya oluşur;
+çünkü kataloğun kendisi sizin reponuzda durur. **Taslakları paylaş** ile gönderip kataloğa ekleyin.
+Kontrol bunun yerine sorun bildirirse senaryo büyük ihtimalle gerçek bir hata yakalamıştır; rapordan
+kayıt açabilirsiniz.
+
+### Kayıt açmak (Jira, Linear, GitHub Issues…)
+
+Bir `issueReporter` verirseniz rapordaki her sorunda **Kayıt aç** butonu çıkar. Açılan kaydın anahtarı
+ve bağlantısı raporda görünür, örneğin *Kayıt açıldı: QA-42*. Her sorun bir kez açılır; açılamazsa
+hata gösterilir ve testçi yeniden deneyebilir.
+
+Hazır gelen `WebhookIssueReporter`, hata kaydını seçtiğiniz bir URL'ye JSON olarak gönderir:
+
+```swift
+.misterOTestPanel(
+    issueReporter: WebhookIssueReporter(
+        name: "Jira",                                        // buton başlığı: "Kayıt aç (Jira)"
+        url: URL(string: "https://hooks.example.com/mistero")!,
+        headers: ["Authorization": "Bearer …"]               // isteğe bağlı
+    )
+)
+```
+
+```json
+{
+  "title": "Geçersiz bilgilerle “Giriş Yap” çalışmamalı: beklenen davranış görülmedi",
+  "steps": ["type: email_field -> a@", "type: password_field -> 123456", "tap: login_button"],
+  "expected": "Hata görünmeli ya da “Giriş Yap” pasif kalmalı; ekran değişmemeli.",
+  "actual": "Geçersiz e-postayla (a@) giriş yapılabildi; ana sayfa açıldı.",
+  "environment": "iPhone (Simülatör) · iOS 27.0 · app.mistero.demo 1.0 (1)",
+  "description": "Aynı rapor düz metin olarak, kaydın gövdesine hazır"
+}
+```
+
+Cevap `key` ve `url` (ya da Jira'nın `self`) alanları olan bir JSON ise rapor kayda bağlantı verir.
+Webhook'u nereye yönlendirebilirsiniz:
+
+- **Jira:** *Incoming webhook* tetikleyicili ve `{{webhookData.title}}`, `{{webhookData.description}}`
+  kullanan bir *Create issue* eylemli Automation kuralı. Automation kural koşmadan cevap verdiği için
+  raporda anahtar olmadan *Kayıt açıldı* yazar.
+- **Zapier, Make ya da n8n:** Linear, GitHub Issues, Azure DevOps ya da başka bir yerde kayıt açan bir
+  webhook tetikleyicisi.
+- **Kendi sunucunuz:** takip aracının API'siyle kaydı açar ve `{"key": …, "url": …}` döner.
+
+Webhook, takip aracının kimlik bilgilerini uygulamanın dışında tutar: staging derlemesindeki her şey
+dışarı çıkarılabilir, webhook ise yalnızca kayıt açabilir. Takip aracını doğrudan çağırmak için
+`IssueReporter`'a uyun:
+
+```swift
+struct LinearReporter: IssueReporter {
+    let name = "Linear"
+
+    func open(_ report: BugReport) async throws -> IssueReceipt {
+        // report.title ve report.text ile kaydı açın; anahtarını ve bağlantısını döndürün.
+    }
+}
+```
+
+`issueReporter` vermezseniz testçi yine **Hata kaydı** ve **Paylaş**'ı kullanabilir.
 
 ### Küçük bir modelle nasıl güvenilir kalır
 
-- **Seçenekler yalnızca ekrandan:** Modelin cevabı "guided generation" ile sınırlanır. `action`
-  yalnızca `tap`, `type`, `assertVisible`, `ask`, `finish`, `fail` olabilir; `target` yalnızca o an
-  ekranda bulunan bir öğe olabilir. Model id uyduramaz ya da hatalı satır yazamaz.
-- **Her seferinde tek adım:** Her tur kısa bir özetle yeni bir oturum başlatır: hedef, cevaplar,
-  şimdiye kadarki adımlar, son sorun ve o anki ekran. Böylece küçük bağlam penceresi (iOS 26'da
-  4.096 token) dolmaz.
-- **Her şey çalıştırılır:** Her adımdan sonra asistan ekranın oturması için 0,7 sn bekler, sonra
-  ekrana yeniden bakar. Üst üste üç adım başarısız olursa durur ve hedefin netleştirilmesini ister.
+- **Seçenekler yalnızca ekrandan:** Guided generation, eylemi `tap`, `type`, dört `assert…` komutu,
+  `ask`, `pass`, `issue` ve `blocked` ile; hedefi de o an ekranda bulunan öğelerle sınırlar. Model id
+  uyduramaz ya da hatalı satır yazamaz.
+- **Durumu görür:** Her öğe türüyle, pasif olup olmadığıyla ve metin alanlarında o anki değeriyle gelir.
+- **Her seferinde tek adım:** Her tur kısa bir özetle yeni bir oturum açar; böylece küçük bağlam
+  penceresi (iOS 26'da 4.096 token) dolmaz.
+- **Her şey çalıştırılır:** Her adım gerçekten koşar. Başarısız adımlar modele geri bildirilir. Bir
+  kontrol üst üste üç başarısız adımda ya da toplam sekiz adımda durur. Her adımdan sonra ekranın
+  oturması için 0,7 sn beklenir.
+- **Yedek plan:** Model plan döndürmezse ya da özel bir model planlama yapmıyorsa, kural tabanlı bir
+  planlayıcı tipik form kontrollerini önerir.
+
+### Taslaklar ve reset
+
+Kaydedilen kontrol, `taslak` ve `asistan` etiketli bir taslak senaryo olur. Test uygulamanın kök
+ekranında başladıysa ve `resetApp` verdiyseniz, taslak koşmadan önce uygulamayı reset'ler. Aksi hâlde
+"reset yok" olarak işaretlenir ve kaydedildiği ekrandan koşturulmalıdır. Kontrolün tarifi taslağın
+`goal` alanında saklanır; böylece taslak sonradan [onarılabilir](#başarısız-bir-senaryoyu-onarmak).
 
 ### Gereksinimler
 
 Varsayılan model Apple'ın cihaz içi modelidir (Foundation Models). iOS 26 veya üzeri, Apple
 Intelligence destekleyen bir cihaz ve açık Apple Intelligence gerekir. Model kullanılamıyorsa sekme
-nedenini gösterir; iOS 16–25'te sekme görünmez. Türkçe desteklenen diller arasında. Her şey cihazda
-çalışır: API anahtarı, internet ya da ücret yok.
-
-### Testi asistanın kendisinin koşması
-
-**Otomatik ilerle** açıkken asistan onay beklemez; hedefe ulaştığına ya da ulaşamayacağına karar
-verene kadar uygulamayı kendisi kullanır, yani testi model koşar. Hızlı keşif kontrolleri için
-kullanışlıdır. Ancak kararı küçük bir model verir, koşular tekrarlanabilir değildir ve daha yavaştır.
-Regresyon testleri için asistana akışı bir kez yazdırın, kataloğa kaydedin ve o andan sonra
-deterministik olarak koşturun.
+nedenini açıklar. Türkçe desteklenen diller arasında. Her şey cihazda çalışır: API anahtarı, internet
+ya da ücret yok.
 
 ### Başka bir model kullanmak
 
 `FlowAssistantModel` protokolüne uyan herhangi bir tipi verebilirsiniz; örneğin daha büyük bir modele
-giden şirket içi bir proxy ya da aynı ağdaki bir Mac'te çalışan bir model:
+giden şirket içi bir proxy. `plan(for:)` ve `check(for:context:)` isteğe bağlıdır; yazılmazsa kural
+tabanlı planlayıcı ekranı planlar ve tarif edilen kontrolü bir başlığa ve beklenen sonuca çevirir.
 
 ```swift
 struct ProxyModel: FlowAssistantModel {
     var availability: AssistantAvailability { .available }
+
+    func plan(for context: PlanContext) async throws -> [PlannedCheck] {
+        // context.prompt'u servisinize gönderip cevabı eşleyin.
+    }
+
+    func check(for request: String, context: PlanContext) async throws -> PlannedCheck {
+        // Testçinin cümlesini bir başlığa ve beklenen sonuca çevirin.
+    }
+
     func nextDecision(for context: AssistantContext) async throws -> AssistantDecision {
         // context.prompt ve context.targets'ı servisinize gönderip cevabı eşleyin.
     }
@@ -333,16 +490,17 @@ Uzak bir model kullanırsanız ekrandaki öğe adları ve testçinin cevapları 
 
 ### Durum
 
-- Asistan döngüsü (soru, onay, reddetme, otomatik mod, hata sınırı, katalog kaydı) sahte bir modelle
+- Asistan (plan sırası, sorunlar, soru ve yeniden koşma, başlangıç ekranına dönüş, durdurma, hata
+  kaydı, taslaklar, tarif edilen kontroller, hatırlanan bilgiler, onarım, kayıt açma) sahte bir modelle
   birim testleriyle kapsanıyor.
-- Asistan sekmesi, demo'nun kural tabanlı modeliyle (`MISTERO_ASSISTANT=demo`) iOS 27 simülatöründe
-  uçtan uca denendi: soru → cevap → onaylanan dört adım → bitiş → katalog kaydı.
-- Üretim şeması, model gerektirmeyen bir birim testiyle doğrulanıyor. Gerçek Apple modelini çağıran
-  iki entegrasyon testi var; model hazır değilse atlanıyorlar. Geliştirmenin yapıldığı makinede
-  model henüz hazır olmadığı için bu testler henüz koşmadı.
+- iOS 27 simülatöründe demo'nun kural tabanlı modeli (`MISTERO_ASSISTANT=demo`) tüm döngüyü koştu:
+  `testData` sayesinde soru sormadan üç kontrol, "a@" hatasının bulunması ve yerel bir webhook üzerinden
+  kayda çevrilmesi, tarif edilen bir "alanları doldur, devam et" kontrolü, kaydedilip koşturulan
+  taslaklar ve başarısız bir katalog senaryosunun "(onarıldı)" taslağına onarılması.
+- Apple modelinin cevaplarını ayrıştırma ve şemaları kurma, model olmadan birim testleriyle doğrulanıyor.
+  Gerçek modeli çağıran iki entegrasyon testi, model yoksa atlanıyor.
 - iOS simülatörü modeli "kullanılabilir" olarak bildiriyor, ancak üretim Apple'ın güvenlik filtresinden
-  "Simulator is not supported" hatasıyla düşüyor. Gerçek modeli bir cihazda deneyin; simülatörde
-  sekme bunu açık bir mesajla söylüyor.
+  "Simulator is not supported" hatasıyla düşüyor; bu yüzden gerçek model bir cihazda denenmeli.
 
 ## Uygulamanızı test edilebilir yapmak
 
@@ -372,6 +530,8 @@ değişince bozulur.
     scenarios: .bundled("mistero-scenarios"),        // senaryo kataloğu (yukarıya bakın)
     resetApp: { router.path = [] },                  // her senaryodan önce çalışır
     assistantModel: nil,                             // nil = iOS 26+'da Apple'ın cihaz içi modeli
+    testData: ["Test e-postası": "qa@acme.com"],     // asistanın uyduramayacağı veriler
+    issueReporter: WebhookIssueReporter(url: hook),  // sorunlarda "Kayıt aç" butonu
     configuration: .init(
         elementTimeout: .seconds(8),                 // öğe başına bekleme (varsayılan 5 sn)
         pollInterval: .milliseconds(200),            // ekranın yeniden taranma aralığı
@@ -382,7 +542,7 @@ değişince bozulur.
 )
 ```
 
-`MisterO.install(in:initialScript:scenarios:resetApp:assistantModel:configuration:enablesSwiftUIAccessibility:)`
+`MisterO.install(in:initialScript:scenarios:resetApp:assistantModel:testData:issueReporter:configuration:enablesSwiftUIAccessibility:)`
 aynı parametreleri alır. `MisterO.uninstall()` paneli kaldırır ve erişilebilirlik ayarını eski haline döndürür.
 
 ## Akışı koddan çalıştırmak
@@ -420,15 +580,17 @@ MisterOCore  (yalnızca Foundation, macOS'ta test edilir)
 ├── UIDriver            runner'ın ekranla konuştuğu protokol
 ├── ScenarioFeed        senaryo kataloğunun kaynağı (uzak, paket, kod içi, özel)
 ├── ScenarioStore       kataloğu yükler, önbelleğe alır, doğrular; tek senaryo ya da suite koşturur
-├── FlowAssistant       hedef → doğrulanmış akış, her seferinde çalıştırılan tek bir adımla
+├── FlowAssistant       ekran için kontrol planlar, koşar, raporlar, testçiyle devam eder
 ├── FlowAssistantModel  asistanın arkasındaki dil modeli için protokol
-└── AppleFlowAssistantModel  guided generation ile Apple'ın cihaz içi modeli (iOS 26+)
+├── AppleFlowAssistantModel  guided generation ile Apple'ın cihaz içi modeli (iOS 26+)
+└── IssueReporter       bulunan sorunu kayda çevirir (WebhookIssueReporter hazır gelir)
 
 MisterO  (UIKit + SwiftUI)
 ├── UIKitDriver         UIDriver = ViewResolver + ActionExecutor
 ├── ViewResolver        UIWindow hiyerarşisini recursive tarar, öğeleri eşleştirir ve sıralar
 ├── ActionExecutor      tap / type'ı açık UIKit API'leriyle uygular
 ├── AccessibilityBootstrap  SwiftUI öğelerini resolver'a görünür kılar
+├── ScreenAnchor        asistanı başlangıç ekranına döndürür; cevaplar için Keychain hafızası
 └── Panel               ayrı bir overlay penceresinde SwiftUI paneli
 ```
 
@@ -498,7 +660,8 @@ SwiftUI giriş ekranı ve bir UIKit ekranı içeren demo uygulaması `Examples/M
 İçinde 4 senaryoluk bir katalog (`Sources/mistero-scenarios.json`; biri bilerek başarısız olur) ve bir
 `resetApp` işleyicisi var. Kataloğu bir URL'den yüklemek için `MISTERO_SCENARIOS_URL` ortam
 değişkenini verin. Apple modelinin olmadığı yerlerde Asistan sekmesini kural tabanlı bir yedek modelle
-denemek için `MISTERO_ASSISTANT=demo` verin:
+denemek için `MISTERO_ASSISTANT=demo`, **Kayıt aç**'ı kendi webhook'unuzla denemek için
+`MISTERO_ISSUE_WEBHOOK` olarak bir URL verin:
 
 ```bash
 open Examples/MisterODemo/MisterODemo.xcodeproj
