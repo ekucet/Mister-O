@@ -39,7 +39,7 @@ wait: 1.5
 - **Yapay zekâ test asistanı.** "Bu ekranı test et"e basarsınız ya da kontrolü düz cümleyle tarif
   edersiniz ("alanları doldur, Devam'a bas; sonraki ekran açılmalı"). Cihaz içi model kontrolü koşar,
   formları gerçekçi verilerle doldurur, sorunları hazır bir hata kaydıyla raporlar ve geçen kontrolleri
-  taslak senaryo olarak kaydeder. Bozulan bir senaryoyu onarabilir de. Beta; bkz.
+  taslak senaryo olarak kaydeder. Bozulan bir senaryoyu onarabilir de. Bkz.
   [Yapay zekâ test asistanı](#yapay-zekâ-test-asistanı).
 - **Tek dokunuşla kayıt.** Takip aracınızı (Jira, Linear, GitHub Issues…) bağlarsanız bulunan sorun;
   adımları, beklenen ve gerçekleşen sonucu, cihaz bilgisi ve ekran görüntüsüyle bir kayda dönüşür.
@@ -63,14 +63,14 @@ SDK, SwiftUI öğelerini görebilmek için private bir API kullanır (bkz. [Swif
 bu yüzden App Store derlemesine kesinlikle girmemelidir.
 
 **Xcode:** *File → Add Package Dependencies…* → `https://github.com/ekucet/Mister-O.git` →
-*Dependency Rule* olarak `0.2.0`'dan itibaren *Up to Next Major Version* seçin → `MisterO`
+*Dependency Rule* olarak `0.3.0`'dan itibaren *Up to Next Major Version* seçin → `MisterO`
 kütüphanesini yalnızca staging hedefine ekleyin.
 
 **Package.swift:**
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/ekucet/Mister-O.git", from: "0.2.0"),
+    .package(url: "https://github.com/ekucet/Mister-O.git", from: "0.3.0"),
 ],
 targets: [
     .target(name: "MyAppStaging", dependencies: [
@@ -78,11 +78,6 @@ targets: [
     ]),
 ]
 ```
-
-> **Beta:** [Yapay zekâ test asistanı](#yapay-zekâ-test-asistanı) `0.3.0-beta.2` sürümünde. Swift Package Manager
-> `from:` ile asla ön sürüm (pre-release) seçmez; bu yüzden açıkça isteyin:
-> `.package(url: "https://github.com/ekucet/Mister-O.git", exact: "0.3.0-beta.2")`.
-> Xcode'da *Dependency Rule* olarak *Exact Version* `0.3.0-beta.2` seçin.
 
 Ardından staging derlemesine bir derleme koşulu ekleyin; örneğin *Build Settings → Active
 Compilation Conditions* içine `STAGING`.
@@ -293,7 +288,7 @@ senaryo bir öncekinin bittiği yerden devam edecek şekilde sıralayın.
 
 ## Yapay zekâ test asistanı
 
-> **Beta.** Asistan döngüsü, rapor ve demo akışı test edildi. Apple'ın cihaz içi modeli henüz bir
+> **Not:** Asistan döngüsü, rapor ve demo akışı test edildi. Apple'ın cihaz içi modeli henüz bir
 > cihazda uçtan uca çalıştırılmadı (bkz. [Durum](#durum)).
 
 Paneli herhangi bir ekranda açın ve **Asistan** sekmesine geçin. İki şekilde başlayabilirsiniz:

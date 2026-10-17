@@ -38,7 +38,7 @@ wait: 1.5
 - **AI test assistant.** Tap "Test this screen", or describe a check in plain words ("fill the fields
   and tap Continue; it should move on"). An on-device model runs it, fills forms with realistic data,
   reports issues with a ready bug report, and saves passing checks as draft scenarios. It can also
-  repair a failing scenario. Beta; see [AI test assistant](#ai-test-assistant).
+  repair a failing scenario. See [AI test assistant](#ai-test-assistant).
 - **Tickets in one tap.** Plug in your tracker (Jira, Linear, GitHub Issues…) and a found issue
   becomes a ticket with steps, expected and actual result, the device and a screenshot.
 - **Waits for you.** `tap`, `type` and `assertVisible` wait until the element shows up or becomes
@@ -64,14 +64,14 @@ The SDK uses a private API to see SwiftUI elements (see [SwiftUI support](#swift
 so it must never ship in an App Store build.
 
 **Xcode:** *File → Add Package Dependencies…* → `https://github.com/ekucet/Mister-O.git` → set
-*Dependency Rule* to *Up to Next Major Version* from `0.2.0` → add the `MisterO` library to your
+*Dependency Rule* to *Up to Next Major Version* from `0.3.0` → add the `MisterO` library to your
 staging target only.
 
 **Package.swift:**
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/ekucet/Mister-O.git", from: "0.2.0"),
+    .package(url: "https://github.com/ekucet/Mister-O.git", from: "0.3.0"),
 ],
 targets: [
     .target(name: "MyAppStaging", dependencies: [
@@ -79,11 +79,6 @@ targets: [
     ]),
 ]
 ```
-
-> **Beta:** the [AI test assistant](#ai-test-assistant) is in `0.3.0-beta.2`. Swift Package Manager never
-> picks a pre-release from `from:`, so ask for it explicitly:
-> `.package(url: "https://github.com/ekucet/Mister-O.git", exact: "0.3.0-beta.2")`.
-> In Xcode, set *Dependency Rule* to *Exact Version* `0.3.0-beta.2`.
 
 Then add a compilation condition to the staging build, for example `STAGING` in
 *Build Settings → Active Compilation Conditions*.
@@ -295,7 +290,7 @@ order the catalog so that each scenario continues from where the previous one en
 
 ## AI test assistant
 
-> **Beta.** The assistant loop, the report and the demo flow are tested. Apple's on-device model has
+> **Note:** The assistant loop, the report and the demo flow are tested. Apple's on-device model has
 > not yet been run end to end on a device (see [Status](#status)).
 
 Open the panel on any screen and switch to **Asistan**. There are two ways to start:
