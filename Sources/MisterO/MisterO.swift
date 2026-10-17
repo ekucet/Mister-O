@@ -36,6 +36,7 @@ public enum MisterO {
     ///   - testData: Asistanın bilmesi gereken test verileri (staging test hesabı gibi). Örnek:
     ///     `["Test hesabı e-postası": "qa@firma.com", "Test hesabı şifresi": "…"]`. Asistan bunları sormaz.
     ///   - issueReporter: Asistanın bulduğu sorunları takip aracınızda kayda çevirir (örn. `WebhookIssueReporter`).
+    ///     Sorunun ekran görüntüsü kayda eklenir.
     ///   - enablesSwiftUIAccessibility: SwiftUI öğelerini bulabilmek için uygulama erişilebilirliğini
     ///     açar (private API, ayrıntı `AccessibilityBootstrap`'ta). Yalnızca UIKit ekranlarınız varsa `false` verin.
     public static func install(
@@ -57,7 +58,8 @@ public enum MisterO {
         let driver = UIKitDriver()
         let runner = InAppTestRunner(driver: driver, configuration: configuration)
         let store = ScenarioStore(feed: feed, runner: runner, resetApp: resetApp)
-        let assistant = makeAssistant(model: assistantModel, driver: driver, resetApp: resetApp, testData: testData)
+        let assistant = makeAssistant(model: assistantModel, driver: driver, scene: scene, resetApp: resetApp,
+                                      testData: testData)
         let panel = PanelModel()
         let window = OverlayWindow(windowScene: scene, panel: panel)
 
@@ -100,6 +102,7 @@ public enum MisterO {
     private static func makeAssistant(
         model: (any FlowAssistantModel)?,
         driver: UIKitDriver,
+        scene: UIWindowScene,
         resetApp: (@MainActor () async -> Void)?,
         testData: [String: String]
     ) -> FlowAssistant {
@@ -110,7 +113,9 @@ public enum MisterO {
         let resolver = driver.resolver
         let facts = testData.sorted { $0.key < $1.key }.map { AssistantAnswer(question: $0.key, answer: $0.value) }
         return FlowAssistant(model: model ?? defaultAssistantModel(), runner: runner,
-                             screen: { resolver.screenElements() }, navigator: ScreenAnchor(), resetApp: resetApp,
+                             screen: { resolver.screenElements() },
+                             screenshot: { [weak scene] in scene.flatMap(ScreenCapture.png(in:)) },
+                             navigator: ScreenAnchor(), resetApp: resetApp,
                              appFacts: facts, memory: KeychainAssistantMemory())
     }
 

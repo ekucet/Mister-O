@@ -89,6 +89,8 @@ public final class FlowAssistant: ObservableObject {
         /// Takip aracında açılan kayıt; aynı sorun için ikinci kayıt açılmasın diye saklanır.
         public internal(set) var issueReceipt: IssueReceipt?
         public internal(set) var issueError: String?
+        /// Kontrol sorunla bittiği andaki ekranın PNG'si; hata kaydına `screenshot.png` olarak eklenir.
+        public internal(set) var screenshot: Data?
         /// Taslak olarak (ya da onarım olarak) kaydedildi.
         public internal(set) var isSaved = false
 
@@ -125,6 +127,7 @@ public final class FlowAssistant: ObservableObject {
     public let model: any FlowAssistantModel
     private let runner: InAppTestRunner
     private let screen: @MainActor () -> [ScreenElement]
+    private let captureScreenshot: (@MainActor () -> Data?)?
     private let navigator: any ScreenNavigating
     private let resetApp: (@MainActor () async -> Void)?
     private let memory: (any AssistantMemory)?
@@ -138,6 +141,7 @@ public final class FlowAssistant: ObservableObject {
     /// - Parameters:
     ///   - runner: Asistana ayrılmış runner (kısa bekleme süresiyle; asistan "öğe yok" cevabını hızlı almalı).
     ///   - screen: O anki ekrandaki öğeler (UIKit katmanında `ViewResolver.inspect()`).
+    ///   - screenshot: O anki ekranın PNG'si; sorunla biten kontrollerde alınır ve hata kaydına eklenir.
     ///   - navigator: Kontroller arasında başlangıç ekranına dönmek için.
     ///   - resetApp: Dönüş başarısız olursa son çare; uygulamayı başlangıç durumuna getirir.
     ///   - settleTime: Her adımdan sonra ekran yeniden okunmadan önce beklenen süre.
@@ -145,6 +149,7 @@ public final class FlowAssistant: ObservableObject {
         model: any FlowAssistantModel,
         runner: InAppTestRunner,
         screen: @escaping @MainActor () -> [ScreenElement],
+        screenshot: (@MainActor () -> Data?)? = nil,
         navigator: any ScreenNavigating = NoopNavigator(),
         resetApp: (@MainActor () async -> Void)? = nil,
         appFacts: [AssistantAnswer] = [],
@@ -156,6 +161,7 @@ public final class FlowAssistant: ObservableObject {
         self.model = model
         self.runner = runner
         self.screen = screen
+        self.captureScreenshot = screenshot
         self.navigator = navigator
         self.resetApp = resetApp
         self.appFacts = appFacts
@@ -429,6 +435,7 @@ public final class FlowAssistant: ObservableObject {
         checks[index].attempts = []
         checks[index].issueReceipt = nil
         checks[index].issueError = nil
+        checks[index].screenshot = nil
         checks[index].isSaved = false
         var lastIssue: String?
         var failures = 0
@@ -455,6 +462,7 @@ public final class FlowAssistant: ObservableObject {
                 checks[index].status = .passed(decision.message?.nonEmpty ?? "Beklenen davranış görüldü.")
                 return
             case .issue:
+                checks[index].screenshot = captureScreenshot?()
                 checks[index].status = .issue(decision.message?.nonEmpty ?? "Beklenen davranış görülmedi.")
                 return
             case .blocked:
@@ -545,8 +553,11 @@ public final class FlowAssistant: ObservableObject {
         let steps = check.attempts.map { attempt in
             attempt.line + (attempt.passed ? "" : "  ← \(attempt.note ?? "başarısız")")
         }
+        let attachments = check.screenshot.map { [BugReport.Attachment(filename: "screenshot.png", mimeType: "image/png",
+                                                                       data: $0)] } ?? []
         return BugReport(title: "\(check.title): beklenen davranış görülmedi", steps: steps,
-                         expected: check.plan.expectation, actual: actual, environment: environment)
+                         expected: check.plan.expectation, actual: actual, environment: environment,
+                         attachments: attachments)
     }
 
     /// Tüm raporun düz metni.

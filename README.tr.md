@@ -42,7 +42,7 @@ wait: 1.5
   taslak senaryo olarak kaydeder. Bozulan bir senaryoyu onarabilir de. Beta; bkz.
   [Yapay zekâ test asistanı](#yapay-zekâ-test-asistanı).
 - **Tek dokunuşla kayıt.** Takip aracınızı (Jira, Linear, GitHub Issues…) bağlarsanız bulunan sorun;
-  adımları, beklenen ve gerçekleşen sonucu ve cihaz bilgisiyle bir kayda dönüşür.
+  adımları, beklenen ve gerçekleşen sonucu, cihaz bilgisi ve ekran görüntüsüyle bir kayda dönüşür.
 - **Kendisi bekler.** `tap`, `type` ve `assertVisible` öğe ekrana gelene ya da aktif olana kadar
   bekler; her geçişten sonra `wait` yazmanız gerekmez.
 - **Net sonuç.** Her adım satır numarası, süresi ve hata mesajıyla Başarılı / Başarısız / Atlandı
@@ -383,6 +383,10 @@ Bir `issueReporter` verirseniz rapordaki her sorunda **Kayıt aç** butonu çık
 ve bağlantısı raporda görünür, örneğin *Kayıt açıldı: QA-42*. Her sorun bir kez açılır; açılamazsa
 hata gösterilir ve testçi yeniden deneyebilir.
 
+Bir kontrol sorunla bittiğinde asistan uygulamanın anahtar penceresinin ekran görüntüsünü alır.
+Mister-O'nun kendi paneli ve baloncuğu görüntüye girmez. Sorun kartında küçük resim olarak görünür ve
+takip aracına `BugReport.attachments` içinde `screenshot.png` olarak gider.
+
 Hazır gelen `WebhookIssueReporter`, hata kaydını seçtiğiniz bir URL'ye JSON olarak gönderir:
 
 ```swift
@@ -402,30 +406,77 @@ Hazır gelen `WebhookIssueReporter`, hata kaydını seçtiğiniz bir URL'ye JSON
   "expected": "Hata görünmeli ya da “Giriş Yap” pasif kalmalı; ekran değişmemeli.",
   "actual": "Geçersiz e-postayla (a@) giriş yapılabildi; ana sayfa açıldı.",
   "environment": "iPhone (Simülatör) · iOS 27.0 · app.mistero.demo 1.0 (1)",
-  "description": "Aynı rapor düz metin olarak, kaydın gövdesine hazır"
+  "description": "Aynı rapor düz metin olarak, kaydın gövdesine hazır",
+  "attachments": [
+    { "filename": "screenshot.png", "mimeType": "image/png", "data": "iVBORw0KGgoAAAANSUhEUg…" }
+  ]
 }
 ```
+
+`data` dosyanın base64 hâlidir; ekran görüntüsü yoksa `attachments` boş gelir. Diğer alanlar öncekiyle
+aynıdır. Ekran görüntüsü gövdeyi epey büyütür; webhook'unuz bunu kaldıramıyorsa
+`includesAttachments: false` verin.
 
 Cevap `key` ve `url` (ya da Jira'nın `self`) alanları olan bir JSON ise rapor kayda bağlantı verir.
 Webhook'u nereye yönlendirebilirsiniz:
 
 - **Jira:** *Incoming webhook* tetikleyicili ve `{{webhookData.title}}`, `{{webhookData.description}}`
   kullanan bir *Create issue* eylemli Automation kuralı. Automation kural koşmadan cevap verdiği için
-  raporda anahtar olmadan *Kayıt açıldı* yazar.
+  raporda anahtar olmadan *Kayıt açıldı* yazar. Automation base64 ekran görüntüsünü eke çeviremez; bu
+  yolda kayıt ekran görüntüsü olmadan açılır.
 - **Zapier, Make ya da n8n:** Linear, GitHub Issues, Azure DevOps ya da başka bir yerde kayıt açan bir
   webhook tetikleyicisi.
-- **Kendi sunucunuz:** takip aracının API'siyle kaydı açar ve `{"key": …, "url": …}` döner.
+- **Kendi sunucunuz:** takip aracının API'siyle kaydı açar, `attachments`'ı yükler ve
+  `{"key": …, "url": …}` döner. Uygulamaya token koymadan ekran görüntüsünü Jira'ya taşımanın yolu budur.
 
 Webhook, takip aracının kimlik bilgilerini uygulamanın dışında tutar: staging derlemesindeki her şey
-dışarı çıkarılabilir, webhook ise yalnızca kayıt açabilir. Takip aracını doğrudan çağırmak için
-`IssueReporter`'a uyun:
+dışarı çıkarılabilir, webhook ise yalnızca kayıt açabilir. Önerilen yol bu yüzden webhook'tur.
+
+#### Doğrudan Jira Cloud'a
+
+`JiraIssueReporter` isteğe bağlıdır; Jira Cloud REST API v3'ü uygulamanın içinden çağırır:
+
+```swift
+#if STAGING
+.misterOTestPanel(
+    issueReporter: JiraIssueReporter(
+        baseURL: URL(string: "https://firmaniz.atlassian.net")!,
+        projectKey: "QA",
+        issueType: "Bug",                                    // kayıt türünün projedeki adı
+        authorization: JiraIssueReporter.basicAuthorization(email: "mistero-bot@firmaniz.com",
+                                                            apiToken: "…")
+    )
+)
+#endif
+```
+
+1. `POST /rest/api/3/issue` kaydı açar. Özet raporun başlığıdır; açıklama (Atlassian Document Format)
+   adımları, beklenen ve gerçekleşen sonucu ve cihazı listeler.
+2. `POST /rest/api/3/issue/{key}/attachments` (`X-Atlassian-Token: no-check` ile) ekran görüntüsünü
+   yükler.
+
+Rapor `…/browse/QA-42`'ye bağlantı verir. Jira kaydı reddederse (yanlış proje anahtarı ya da kayıt
+türü gibi) hata Jira'nın yazdığı gibi gösterilir. Yalnızca yükleme düşerse kayıt yine açılmış sayılır;
+ikinci dokunuş aynı kaydı tekrar açmaz ve rapor nedeni anahtarın altında yazar. `authorization`,
+`Authorization` başlığının tam değeridir; `Bearer …` da olur. Jira Data Center'da REST v3 yoktur; orada
+webhook kullanın.
+
+> [!WARNING]
+> Token uygulamanın içine girer. Staging derlemesindeki her şey dışarı çıkarılabilir: binary, içindeki
+> metinler, ortam değişkenleri, Keychain. Token'ı ele geçiren, o hesabın Jira'da yapabildiği her şeyi
+> yapabilir; yalnızca kayıt açmakla kalmaz. Webhook'u tercih edin. `JiraIssueReporter` kullanacaksanız
+> yalnızca o projede kayıt açabilen ayrı bir hesabın token'ını verin, release derlemelerine sokmayın ve
+> bir derleme dışarı sızarsa token'ı iptal edin.
+
+Başka takip araçları için `IssueReporter`'a uyun. Ekran görüntüsü `report.attachments`'tadır:
 
 ```swift
 struct LinearReporter: IssueReporter {
     let name = "Linear"
 
     func open(_ report: BugReport) async throws -> IssueReceipt {
-        // report.title ve report.text ile kaydı açın; anahtarını ve bağlantısını döndürün.
+        // report.title ve report.text ile kaydı açın, report.attachments'ı yükleyin;
+        // anahtarını ve bağlantısını döndürün.
     }
 }
 ```
@@ -491,8 +542,10 @@ Uzak bir model kullanırsanız ekrandaki öğe adları ve testçinin cevapları 
 ### Durum
 
 - Asistan (plan sırası, sorunlar, soru ve yeniden koşma, başlangıç ekranına dönüş, durdurma, hata
-  kaydı, taslaklar, tarif edilen kontroller, hatırlanan bilgiler, onarım, kayıt açma) sahte bir modelle
-  birim testleriyle kapsanıyor.
+  kaydı, taslaklar, tarif edilen kontroller, hatırlanan bilgiler, onarım, kayıt açma, ekran görüntüsü)
+  sahte bir modelle birim testleriyle kapsanıyor. `WebhookIssueReporter` ve `JiraIssueReporter`'ın
+  gönderdiği istekler birim testleriyle doğrulanıyor; `JiraIssueReporter` henüz gerçek bir Jira
+  sitesinde denenmedi.
 - iOS 27 simülatöründe demo'nun kural tabanlı modeli (`MISTERO_ASSISTANT=demo`) tüm döngüyü koştu:
   `testData` sayesinde soru sormadan üç kontrol, "a@" hatasının bulunması ve yerel bir webhook üzerinden
   kayda çevrilmesi, tarif edilen bir "alanları doldur, devam et" kontrolü, kaydedilip koşturulan
@@ -583,7 +636,7 @@ MisterOCore  (yalnızca Foundation, macOS'ta test edilir)
 ├── FlowAssistant       ekran için kontrol planlar, koşar, raporlar, testçiyle devam eder
 ├── FlowAssistantModel  asistanın arkasındaki dil modeli için protokol
 ├── AppleFlowAssistantModel  guided generation ile Apple'ın cihaz içi modeli (iOS 26+)
-└── IssueReporter       bulunan sorunu kayda çevirir (WebhookIssueReporter hazır gelir)
+└── IssueReporter       bulunan sorunu kayda çevirir (WebhookIssueReporter, JiraIssueReporter)
 
 MisterO  (UIKit + SwiftUI)
 ├── UIKitDriver         UIDriver = ViewResolver + ActionExecutor
@@ -591,6 +644,7 @@ MisterO  (UIKit + SwiftUI)
 ├── ActionExecutor      tap / type'ı açık UIKit API'leriyle uygular
 ├── AccessibilityBootstrap  SwiftUI öğelerini resolver'a görünür kılar
 ├── ScreenAnchor        asistanı başlangıç ekranına döndürür; cevaplar için Keychain hafızası
+├── ScreenCapture       kayıt için uygulamanın anahtar penceresinin görüntüsü (overlay hariç)
 └── Panel               ayrı bir overlay penceresinde SwiftUI paneli
 ```
 

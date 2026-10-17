@@ -317,10 +317,19 @@ struct AssistantView: View {
         }
     }
 
-    /// Sorun: takip aracında kayıt aç (varsa), hata kaydını kopyala/paylaş, tekrar dene.
+    /// Sorun: ekran görüntüsü, takip aracında kayıt aç (varsa), hata kaydını kopyala/paylaş, tekrar dene.
     private func issueActions(for check: FlowAssistant.Check) -> some View {
         let report = assistant.bugReport(for: check, environment: DeviceEnvironment.summary)
         return VStack(alignment: .leading, spacing: 6) {
+            if let data = check.screenshot, let image = UIImage(data: data) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(height: 96)
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.gray.opacity(0.4)))
+                    .accessibilityLabel("Sorunun ekran görüntüsü")
+            }
             if let issueReporter {
                 if let receipt = check.issueReceipt {
                     let title = "Kayıt açıldı" + (receipt.key.map { ": \($0)" } ?? "")
@@ -328,6 +337,9 @@ struct AssistantView: View {
                         Link(destination: url) { Label(title, systemImage: "arrow.up.right.square") }
                     } else {
                         Label(title, systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                    }
+                    if let warning = receipt.warning {
+                        Text(warning).foregroundStyle(.orange)
                     }
                 } else {
                     Button {
