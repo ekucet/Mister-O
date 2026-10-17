@@ -108,7 +108,8 @@ struct ElementAttributes {
         switch view {
         case let field as UITextField:
             guard let text = field.text, !text.isEmpty else { return nil }
-            return field.isSecureTextEntry ? "(gizli, dolu)" : text
+            // Modele giden değer; istemler İngilizce.
+            return field.isSecureTextEntry ? "(hidden, filled)" : text
         case let textView as UITextView:
             return textView.text?.nonEmpty
         default:

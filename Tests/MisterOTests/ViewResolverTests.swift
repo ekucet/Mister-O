@@ -139,7 +139,7 @@ struct ViewResolverTests {
         #expect(items["email"]?.inputKind == "email")
         #expect(items["email"]?.value == nil)
         #expect(items["password"]?.inputKind == "password")
-        #expect(items["password"]?.value == "(gizli, dolu)")
+        #expect(items["password"]?.value == "(hidden, filled)")
         #expect(items["Gönder"]?.isEnabled == false)
 
         let driver = UIKitDriver(resolver: resolver)

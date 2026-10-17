@@ -62,7 +62,7 @@ struct FloatingBubble: View {
         .frame(width: PanelModel.bubbleDiameter, height: PanelModel.bubbleDiameter)
         .shadow(color: .black.opacity(0.2), radius: 8, y: 3)
         .contentShape(Circle())
-        .accessibilityLabel("Mister-O test paneli")
+        .accessibilityLabel(L("Mister-O test panel"))
     }
 
     /// Senaryolar arasındaki reset sırasında runner boşta olsa da baloncuk "çalışıyor" görünür.

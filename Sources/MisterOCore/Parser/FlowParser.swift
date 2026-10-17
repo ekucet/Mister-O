@@ -38,7 +38,7 @@ public struct FlowParser: Sendable {
         }
 
         if issues.isEmpty, steps.isEmpty {
-            issues.append(FlowParseError.Issue(line: nil, message: "Çalıştırılacak adım yok."))
+            issues.append(FlowParseError.Issue(line: nil, message: L("There are no steps to run.")))
         }
         guard issues.isEmpty else { throw FlowParseError(issues: issues) }
         return steps
@@ -79,7 +79,7 @@ public struct FlowParser: Sendable {
         }
 
         guard let colon = line.firstIndex(of: ":") else {
-            throw LineError("':' eksik. Beklenen biçim → komut: değer")
+            throw LineError(L("Missing ':'. Expected format → command: value"))
         }
         let keyword = line[..<colon].trimmingCharacters(in: .whitespaces)
         var scanner = ArgumentScanner(line[line.index(after: colon)...])
@@ -92,7 +92,7 @@ public struct FlowParser: Sendable {
         case "type":
             let target = try scanner.value(stopsAtArrow: true)
             guard scanner.consumeArrow() else {
-                throw LineError("'type' komutunda '->' eksik. Örnek → type: \"email_field\" -> \"metin\"")
+                throw LineError(L("Missing '->' in 'type'. Example → type: \"email_field\" -> \"text\""))
             }
             // Boş metin ("") alanı temizlemek için geçerlidir.
             command = .typeText(ElementSelector(target), text: try scanner.value(allowsEmpty: true))
@@ -102,7 +102,7 @@ public struct FlowParser: Sendable {
             // Türkçe klavyede ondalık ayırıcı virgül olabilir: "wait: 1,5"
             guard let seconds = Double(raw.replacingOccurrences(of: ",", with: ".")),
                   seconds.isFinite, (0...Self.maxWaitSeconds).contains(seconds) else {
-                throw LineError("Geçersiz süre '\(raw)'. 0–\(Int(Self.maxWaitSeconds)) arası saniye bekleniyor (ör. wait: 1.5)")
+                throw LineError(L("Invalid duration '%@'. Expected 0–%ld seconds (e.g. wait: 1.5)", raw, Int(Self.maxWaitSeconds)))
             }
             command = .wait(seconds: seconds)
 
@@ -119,8 +119,8 @@ public struct FlowParser: Sendable {
             command = .assertDisabled(ElementSelector(try scanner.value()))
 
         default:
-            throw LineError("Bilinmeyen komut '\(keyword)'. Desteklenenler → tap, type, wait, assertVisible, "
-                            + "assertNotVisible, assertEnabled, assertDisabled")
+            throw LineError(L("Unknown command '%@'. Supported → tap, type, wait, assertVisible, assertNotVisible, assertEnabled, assertDisabled",
+                              keyword))
         }
 
         try scanner.expectEnd()
@@ -141,7 +141,7 @@ public struct FlowParseError: Error, Equatable, Sendable, CustomStringConvertibl
         }
 
         public var description: String {
-            line.map { "Satır \($0): \(message)" } ?? message
+            line.map { L("Line %ld: %@", $0, message) } ?? message
         }
     }
 
@@ -178,7 +178,7 @@ struct ArgumentScanner {
     mutating func value(stopsAtArrow: Bool = false, allowsEmpty: Bool = false) throws(LineError) -> String {
         skipWhitespace()
         guard let first = peek(), !isCommentStart(at: position) else {
-            throw LineError("Değer eksik.")
+            throw LineError(L("Missing value."))
         }
 
         let value: String
@@ -191,7 +191,7 @@ struct ArgumentScanner {
         }
 
         guard allowsEmpty || !value.trimmingCharacters(in: .whitespaces).isEmpty else {
-            throw LineError("Değer boş olamaz.")
+            throw LineError(L("The value can't be empty."))
         }
         return value
     }
@@ -212,7 +212,7 @@ struct ArgumentScanner {
     mutating func expectEnd() throws(LineError) {
         skipWhitespace()
         guard position < characters.count, !isCommentStart(at: position) else { return }
-        throw LineError("Beklenmeyen içerik: '\(String(characters[position...]))'")
+        throw LineError(L("Unexpected content: '%@'", String(characters[position...])))
     }
 
     // MARK: Yardımcılar
@@ -236,7 +236,7 @@ struct ArgumentScanner {
                 result.append(character)
             }
         }
-        throw LineError("Kapanmamış tırnak.")
+        throw LineError(L("Unclosed quote."))
     }
 
     private mutating func bare(stopsAtArrow: Bool) -> String {

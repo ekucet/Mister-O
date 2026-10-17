@@ -69,7 +69,7 @@ extension Scenario: Codable {
         } else {
             throw DecodingError.dataCorruptedError(
                 forKey: .steps, in: container,
-                debugDescription: "'\(name)' senaryosunda 'steps' ya da 'flow' gerekli."
+                debugDescription: L("Scenario '%@' needs 'steps' or 'flow'.", name)
             )
         }
 
@@ -168,19 +168,19 @@ public enum ScenarioCatalog {
         return (try? String(decoding: encoder.encode(value), as: UTF8.self)) ?? "\"\""
     }
 
-    /// Katalog hatalarını QA ekibinin anlayacağı dile çevirir (ör. "scenarios[2].name alanı eksik").
+    /// Katalog hatalarını QA ekibinin anlayacağı dile çevirir (ör. "scenarios[2].name is missing.").
     public static func describe(_ error: any Error) -> String {
         guard let decodingError = error as? DecodingError else {
             return (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         }
         switch decodingError {
         case .keyNotFound(let key, let context):
-            return "\(path(context.codingPath + [key])) alanı eksik."
+            return L("%@ is missing.", path(context.codingPath + [key]))
         case .typeMismatch(_, let context), .valueNotFound(_, let context):
-            return "\(path(context.codingPath)) alanının tipi hatalı."
+            return L("%@ has the wrong type.", path(context.codingPath))
         case .dataCorrupted(let context):
             return context.codingPath.isEmpty
-                ? "Katalog geçerli bir JSON değil."
+                ? L("The catalog isn't valid JSON.")
                 : context.debugDescription
         @unknown default:
             return decodingError.localizedDescription

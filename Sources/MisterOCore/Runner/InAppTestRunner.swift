@@ -143,7 +143,7 @@ public final class InAppTestRunner: ObservableObject {
         var lines = ["Mister-O · \(state.title)" + (elapsed.map { " · \($0.secondsText)" } ?? "")]
         lines += parseIssues.map { "⚠︎ \($0)" }
         for result in results {
-            var line = "\(result.status.symbol) [satır \(result.step.line)] \(result.step.source)"
+            var line = "\(result.status.symbol) [\(L("line %ld", result.step.line))] \(result.step.source)"
             if case .failed(let message) = result.status {
                 line += "\n    → \(message)"
             }
@@ -161,7 +161,7 @@ public final class InAppTestRunner: ObservableObject {
         } catch is CancellationError {
             return .skipped
         } catch let error as DriverError where error.isRetryable {
-            return .failed("\(error.localizedDescription) (\(configuration.elementTimeout.secondsText) beklendi)")
+            return .failed(L("%@ (waited %@)", error.localizedDescription, configuration.elementTimeout.secondsText))
         } catch {
             return .failed(error.localizedDescription)
         }

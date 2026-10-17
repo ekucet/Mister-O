@@ -56,6 +56,9 @@ wait: 1.5
 - iOS 16 veya üzeri
 - Xcode 16 veya üzeri (Swift 6 araç zinciri)
 
+> Panel, asistan, hata kayıtları ve açılan kayıtlar Türkçe ya da İngilizcedir ve cihazın dilini izler.
+> Bkz. [Dil](#dil).
+
 ## Kurulum
 
 Paketi Swift Package Manager ile ekleyin ve **yalnızca Test/Staging hedefinize** bağlayın.
@@ -580,6 +583,7 @@ değişince bozulur.
     assistantModel: nil,                             // nil = iOS 26+'da Apple'ın cihaz içi modeli
     testData: ["Test e-postası": "qa@acme.com"],     // asistanın uyduramayacağı veriler
     issueReporter: WebhookIssueReporter(url: hook),  // sorunlarda "Kayıt aç" butonu
+    language: nil,                                   // nil = cihazın dili; ya da .turkish, .english
     configuration: .init(
         elementTimeout: .seconds(8),                 // öğe başına bekleme (varsayılan 5 sn)
         pollInterval: .milliseconds(200),            // ekranın yeniden taranma aralığı
@@ -590,8 +594,25 @@ değişince bozulur.
 )
 ```
 
-`MisterO.install(in:initialScript:scenarios:resetApp:assistantModel:testData:issueReporter:configuration:enablesSwiftUIAccessibility:)`
+`MisterO.install(in:initialScript:scenarios:resetApp:assistantModel:testData:issueReporter:language:configuration:enablesSwiftUIAccessibility:)`
 aynı parametreleri alır. `MisterO.uninstall()` paneli kaldırır ve erişilebilirlik ayarını eski haline döndürür.
+
+### Dil
+
+Panel, asistanın raporu ve mesajları, hata kayıtları, takip aracında açılan kayıtlar ve akış hataları
+Türkçe ya da İngilizcedir. Mister-O cihazın dilini izler; desteklenmeyen bir dilde İngilizceye döner.
+Bir dili sabitlemek için `language:` verin; örneğin Türk bir QA ekibi İngilizce bir derlemeyi test
+ederken:
+
+```swift
+.misterOTestPanel(language: .turkish)
+```
+
+Asistanın modeline kontrolleri ve mesajları aynı dilde yazması söylenir; kaydettiği taslakların
+etiketleri de bu dildedir (`taslak`, `asistan`, `onarıldı` ya da `draft`, `assistant`, `repaired`).
+Yeni bir dil eklemek için anahtarları İngilizce metin olan
+`Sources/MisterOCore/Resources/<kod>.lproj/Localizable.strings` dosyasını ve `MisterOLanguage`'a bir
+`case` ekleyin.
 
 ## Akışı koddan çalıştırmak
 
@@ -715,6 +736,9 @@ denemek için `MISTERO_ASSISTANT=demo`, **Kayıt aç**'ı kendi webhook'unuzla d
 ```bash
 open Examples/MisterODemo/MisterODemo.xcodeproj
 ```
+
+Panel simülatörün dilini izler. Diğer dili görmek için şemanın başlatma argümanlarına
+`-AppleLanguages (en)` ya da `-AppleLanguages (tr)` ekleyin.
 
 Demo projesi `project.yml` dosyasından [XcodeGen](https://github.com/yonaskolb/XcodeGen) ile
 üretilir; o dosyayı değiştirdikten sonra `xcodegen generate` çalıştırın.

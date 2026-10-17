@@ -41,13 +41,13 @@ public enum DriverError: Error, Equatable, Sendable {
 extension DriverError: LocalizedError {
     public var errorDescription: String? {
         switch self {
-        case .elementNotFound(let selector): "Ekranda bulunamadı: \(selector)"
-        case .elementDisabled(let selector): "Öğe pasif (disabled): \(selector)"
-        case .notActionable(let selector): "Öğe bulundu ama tıklanabilir değil: \(selector)"
-        case .notTextInput(let selector): "Öğe bir metin alanı değil: \(selector)"
-        case .focusFailed(let selector): "Metin alanına odaklanılamadı: \(selector)"
-        case .stillVisible(let selector): "Hâlâ ekranda: \(selector)"
-        case .elementEnabled(let selector): "Öğe aktif, pasif olması bekleniyordu: \(selector)"
+        case .elementNotFound(let selector): L("Not on screen: %@", "\(selector)")
+        case .elementDisabled(let selector): L("Element is disabled: %@", "\(selector)")
+        case .notActionable(let selector): L("Element found but it can't be tapped: %@", "\(selector)")
+        case .notTextInput(let selector): L("Element isn't a text field: %@", "\(selector)")
+        case .focusFailed(let selector): L("Couldn't focus the text field: %@", "\(selector)")
+        case .stillVisible(let selector): L("Still on screen: %@", "\(selector)")
+        case .elementEnabled(let selector): L("Element is enabled, it should be disabled: %@", "\(selector)")
         }
     }
 }

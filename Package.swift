@@ -3,6 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "MisterO",
+    defaultLocalization: "en",
     // macOS yalnızca MisterOCore testlerini `swift test` ile Mac'te koşabilmek için var;
     // SDK'nın kendisi iOS'ta çalışır.
     platforms: [.iOS(.v16), .macOS(.v13)],
@@ -11,7 +12,7 @@ let package = Package(
     ],
     targets: [
         // Platformdan bağımsız: komut modeli, parser, runner motoru, sürücü protokolü.
-        .target(name: "MisterOCore"),
+        .target(name: "MisterOCore", resources: [.process("Resources")]),
         // UIKit/SwiftUI katmanı: view resolver, action executor, test paneli.
         .target(name: "MisterO", dependencies: ["MisterOCore"]),
         .testTarget(name: "MisterOCoreTests", dependencies: ["MisterOCore"]),

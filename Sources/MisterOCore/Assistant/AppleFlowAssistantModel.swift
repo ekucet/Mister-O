@@ -22,13 +22,13 @@ public struct AppleFlowAssistantModel: FlowAssistantModel {
         case .unavailable(let reason):
             switch reason {
             case .deviceNotEligible:
-                return .unavailable("Bu cihaz Apple Intelligence'ı desteklemiyor.")
+                return .unavailable(L("This device doesn't support Apple Intelligence."))
             case .appleIntelligenceNotEnabled:
-                return .unavailable("Ayarlar → Apple Intelligence'tan özelliği açın.")
+                return .unavailable(L("Turn it on in Settings → Apple Intelligence."))
             case .modelNotReady:
-                return .unavailable("Model henüz hazır değil; indirme sürüyor olabilir.")
+                return .unavailable(L("The model isn't ready yet; it may still be downloading."))
             @unknown default:
-                return .unavailable("Cihaz içi model kullanılamıyor.")
+                return .unavailable(L("The on-device model isn't available."))
             }
         }
     }
@@ -63,7 +63,7 @@ public struct AppleFlowAssistantModel: FlowAssistantModel {
         } catch {
             #if targetEnvironment(simulator)
             // Simülatör modeli "available" bildirse de güvenlik filtresi "Simulator is not supported" diyebiliyor.
-            throw AssistantModelError("Apple'ın cihaz içi modeli bu simülatörde yanıt üretemedi; gerçek bir cihazda deneyin. (\(error.localizedDescription))")
+            throw AssistantModelError(L("Apple's on-device model couldn't answer on this simulator; try a real device. (%@)", error.localizedDescription))
             #else
             throw error
             #endif
@@ -76,9 +76,9 @@ public struct AppleFlowAssistantModel: FlowAssistantModel {
         DynamicGenerationSchema(
             name: "Check",
             properties: [
-                .init(name: "title", description: "Short Turkish sentence naming the check.",
+                .init(name: "title", description: "Short \(MisterOLanguage.current.promptName) sentence naming the check.",
                       schema: DynamicGenerationSchema(type: String.self)),
-                .init(name: "expectation", description: "What should happen, in Turkish.",
+                .init(name: "expectation", description: "What should happen, in \(MisterOLanguage.current.promptName).",
                       schema: DynamicGenerationSchema(type: String.self)),
                 .init(name: "leavesScreen", description: "True if a successful run leaves this screen.",
                       schema: DynamicGenerationSchema(type: Bool.self)),
@@ -104,7 +104,7 @@ public struct AppleFlowAssistantModel: FlowAssistantModel {
             name: "Decision",
             description: "The single next step of the check.",
             properties: [
-                .init(name: "message", description: "Short Turkish reason; the question for ask; the result for pass, issue or blocked.",
+                .init(name: "message", description: "Short \(MisterOLanguage.current.promptName) reason; the question for ask; the result for pass, issue or blocked.",
                       schema: DynamicGenerationSchema(type: String.self)),
                 .init(name: "action", schema: DynamicGenerationSchema(name: "Action", anyOf: AssistantAction.allCases.map(\.rawValue))),
                 .init(name: "target", description: "Element copied from the screen list, or - for ask, pass, issue and blocked.",
@@ -135,7 +135,7 @@ public struct AppleFlowAssistantModel: FlowAssistantModel {
     static func decodeDecision(_ content: GeneratedContent) throws -> AssistantDecision {
         let rawAction = try content.value(String.self, forProperty: "action")
         guard let action = AssistantAction(rawValue: rawAction) else {
-            throw AssistantModelError("Model tanınmayan bir eylem döndü: \(rawAction)")
+            throw AssistantModelError(L("The model returned an unknown action: %@", rawAction))
         }
         return AssistantDecision(
             action: action,
@@ -148,13 +148,13 @@ public struct AppleFlowAssistantModel: FlowAssistantModel {
     private static func describe(_ error: LanguageModelSession.GenerationError) -> String {
         switch error {
         case .exceededContextWindowSize:
-            "Modelin bağlam sınırı aşıldı; hedefi kısaltın ya da daha sade bir ekranda deneyin."
+            L("The model's context limit was exceeded; shorten the request or try a simpler screen.")
         case .guardrailViolation:
-            "Apple'ın güvenlik filtresi bu isteği reddetti."
+            L("Apple's safety filter rejected this request.")
         case .unsupportedLanguageOrLocale:
-            "Model bu dili ya da bölgeyi desteklemiyor."
+            L("The model doesn't support this language or region.")
         default:
-            "Model yanıt üretemedi (\(error.localizedDescription))."
+            L("The model couldn't answer (%@).", error.localizedDescription)
         }
     }
 }

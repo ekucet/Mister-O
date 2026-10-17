@@ -12,7 +12,7 @@ struct RunLogView: View {
                 LazyVStack(alignment: .leading, spacing: 8) {
                     if runner.results.isEmpty, runner.parseIssues.isEmpty {
                         // Not: material üstündeki ScrollView'da yarı saydam `.secondary` kayboluyor; opak gri kullan.
-                        Text("Akışı yazın ve ▶︎ Çalıştır'a basın. Ekrandaki id'leri görmek için “Öğeler” sekmesine bakın.")
+                        Text(L("Write a flow and tap ▶︎ Run. To see the ids on the screen, open the “Elements” tab."))
                             .font(.footnote)
                             .foregroundStyle(Color.gray)
                     }
@@ -60,7 +60,7 @@ struct StepRow: View {
             }
             Spacer(minLength: 4)
             VStack(alignment: .trailing, spacing: 2) {
-                Text("satır \(result.step.line)")
+                Text(L("line %ld", result.step.line))
                 if let duration = result.duration {
                     Text(duration.secondsText)
                 }

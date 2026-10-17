@@ -97,10 +97,10 @@ struct TestPanelView: View {
         VStack(alignment: .leading, spacing: 10) {
             header
 
-            Picker("Bölüm", selection: $section) {
-                Text("Asistan").tag(Section.assistant)
-                Text("Senaryolar").tag(Section.scenarios)
-                Text("Gelişmiş").tag(Section.advanced)
+            Picker(L("Section"), selection: $section) {
+                Text(L("Assistant")).tag(Section.assistant)
+                Text(L("Scenarios")).tag(Section.scenarios)
+                Text(L("Advanced")).tag(Section.advanced)
             }
             .pickerStyle(.segmented)
 
@@ -141,9 +141,9 @@ struct TestPanelView: View {
 
         controls
 
-        Picker("Gelişmiş", selection: advancedPaneBinding) {
-            Text("Log").tag(AdvancedPane.log)
-            Text("Öğeler").tag(AdvancedPane.elements)
+        Picker(L("Advanced"), selection: advancedPaneBinding) {
+            Text(L("Log")).tag(AdvancedPane.log)
+            Text(L("Elements")).tag(AdvancedPane.elements)
         }
         .pickerStyle(.segmented)
         .controlSize(.small)
@@ -173,14 +173,14 @@ struct TestPanelView: View {
                 Image(systemName: "doc.on.doc")
             }
             .disabled(reportText.isEmpty)
-            .accessibilityLabel("Raporu kopyala")
+            .accessibilityLabel(L("Copy report"))
 
             Button(action: collapse) {
                 Image(systemName: "chevron.down.circle.fill")
                     .font(.title2)
                     .foregroundStyle(.secondary)
             }
-            .accessibilityLabel("Paneli küçült")
+            .accessibilityLabel(L("Minimize panel"))
         }
     }
 
@@ -188,13 +188,13 @@ struct TestPanelView: View {
         HStack {
             if isBusy {
                 Button(role: .destructive, action: stop) {
-                    Label("Durdur", systemImage: "stop.fill")
+                    Label(L("Stop"), systemImage: "stop.fill")
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.red)
             } else {
                 Button(action: play) {
-                    Label("Çalıştır", systemImage: "play.fill")
+                    Label(L("Run"), systemImage: "play.fill")
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.indigo)
@@ -291,7 +291,7 @@ struct TestPanelView: View {
         guard !runner.results.isEmpty else { return "" }
         let passed = runner.results.filter { $0.status == .passed }.count
         let elapsed = runner.elapsed.map { " · \($0.secondsText)" } ?? ""
-        return "\(passed)/\(runner.results.count) adım\(elapsed)"
+        return L("%ld/%ld steps", passed, runner.results.count) + elapsed
     }
 }
 

@@ -128,14 +128,14 @@ struct FlowAssistantTests {
         #expect(assistant.checks[0].attempts.first?.passed == false)
         #expect(assistant.checks[1].status == .needsInput("Hangi hesapla?"))
         #expect(assistant.stage == .finished)
-        #expect(assistant.summaryText == "2 kontrol · 1 sorun · 1 bilgi bekliyor")
+        #expect(assistant.summaryText == "2 checks · 1 issue · 1 waiting for input")
 
         let report = assistant.bugReport(for: assistant.checks[0], environment: "iPhone · iOS 27")
-        #expect(report.title == "Boş formla giriş yapılamamalı: beklenen davranış görülmedi")
+        #expect(report.title == "Boş formla giriş yapılamamalı: expected behavior not seen")
         #expect(report.actual == "Boş formda buton aktif.")
-        #expect(report.text.contains("1. assertDisabled: login_button  ← Öğe aktif, pasif olması bekleniyordu"))
-        #expect(report.text.contains("Beklenen: Buton pasif olmalı"))
-        #expect(report.text.contains("Ortam: iPhone · iOS 27"))
+        #expect(report.text.contains("1. assertDisabled: login_button  ← Element is enabled, it should be disabled"))
+        #expect(report.text.contains("Expected: Buton pasif olmalı"))
+        #expect(report.text.contains("Environment: iPhone · iOS 27"))
 
         await model.add([
             .init(action: .type, target: "email_field", text: "qa@firma.com"),
@@ -159,7 +159,7 @@ struct FlowAssistantTests {
         #expect(contexts.first?.prompt.contains("- login_button | - | Button · AX") == true)
 
         let scenario = try #require(assistant.scenario(for: assistant.checks[1]))
-        #expect(scenario.tags == ["taslak", "asistan"])
+        #expect(scenario.tags == ["draft", "assistant"])
         // resetApp yok: senaryo kaydedildiği ekrandan başlamalı.
         #expect(scenario.resetsApp == false)
         #expect(scenario.script.hasPrefix("type: email_field -> qa@firma.com\n"))
@@ -203,7 +203,7 @@ struct FlowAssistantTests {
 
         #expect(navigator.marks == 1)
         #expect(navigator.returns == 1)
-        #expect(assistant.checks.map(\.status) == [.passed("Beklenen davranış görüldü."), .passed("Beklenen davranış görüldü.")])
+        #expect(assistant.checks.map(\.status) == [.passed("The expected behavior was seen."), .passed("The expected behavior was seen.")])
     }
 
     @Test func fallsBackToResetAndSkipsWhenTheStartCannotBeReached() async {
@@ -232,9 +232,9 @@ struct FlowAssistantTests {
         stuck.explore()
         await waitUntilIdle(stuck)
         #expect(stuck.checks.map(\.status) == [
-            .passed("Beklenen davranış görüldü."),
-            .skipped("Başlangıç ekranına dönülemedi."),
-            .skipped("Başlangıç ekranına dönülemedi."),
+            .passed("The expected behavior was seen."),
+            .skipped("Couldn't return to the start screen."),
+            .skipped("Couldn't return to the start screen."),
         ])
     }
 
@@ -256,7 +256,7 @@ struct FlowAssistantTests {
             Issue.record("sürdürülemedi olmalıydı: \(String(describing: assistant.checks.first?.status))")
             return
         }
-        #expect(message.contains("Üst üste 3 adım başarısız"))
+        #expect(message.contains("3 steps in a row failed"))
         let contexts = await model.contexts
         #expect(contexts[1].lastIssue?.contains("no valid target") == true)
         #expect(contexts[2].lastIssue?.contains("'type: label -> x' failed") == true)
@@ -274,7 +274,7 @@ struct FlowAssistantTests {
         assistant.stop()
 
         #expect(assistant.stage == .finished)
-        #expect(assistant.checks.allSatisfy { $0.status == .skipped("Durduruldu.") })
+        #expect(assistant.checks.allSatisfy { $0.status == .skipped("Stopped.") })
     }
 
     @Test func openedIssuesAndSavedDraftsAreRememberedPerCheck() async {
@@ -393,7 +393,7 @@ struct FlowAssistantTests {
         let resets = Counter()
         let scenario = Scenario(id: "login", name: "Giriş", summary: "Ana sayfa açılmalı", tags: ["taslak"],
                                 goal: "Giriş yapılabilmeli", script: "tap: login_button")
-        let repairTitle = "Onar: Giriş"
+        let repairTitle = "Repair: Giriş"
         let model = ScriptedModel(plan: [], decisions: [repairTitle: [
             .init(action: .tap, target: "new_login_button"),
             .init(action: .pass, target: "-"),
@@ -423,8 +423,8 @@ struct FlowAssistantTests {
         let catalogScenario = Scenario(id: "checkout", name: "Ödeme", script: "tap: pay")
         let copy = store.saveRepair(of: catalogScenario, steps: ["tap: pay_now"])
         #expect(copy.id == "checkout-onarildi")
-        #expect(copy.name == "Ödeme (onarıldı)")
-        #expect(copy.tags.contains("onarıldı"))
+        #expect(copy.name == "Ödeme (repaired)")
+        #expect(copy.tags.contains("repaired"))
     }
 
     @Test func requestParsingFindsTheExpectation() {
@@ -433,7 +433,7 @@ struct FlowAssistantTests {
         #expect(HeuristicPlanner.check(for: "alanları doldur, doğru butona bas, ilerlemeli, yoksa hata").expectation
                 == "İlerlemeli.")
         #expect(HeuristicPlanner.check(for: "Sepete ürün ekle").expectation
-                == "İstenen davranış gerçekleşmeli ve ekranda doğrulanmalı.")
+                == "The requested behavior should happen and be verified on screen.")
         #expect(HeuristicPlanner.check(for: "Sepete ürün ekle").request == "Sepete ürün ekle")
     }
 
@@ -456,7 +456,7 @@ struct FlowAssistantTests {
         let plan = HeuristicPlanner.plan(PlanContext(focus: nil, screen: form))
         #expect(plan.count == 3)
         #expect(plan.map(\.leavesScreen) == [false, false, true])
-        #expect(plan[0].title == "Boş formla “Giriş Yap” çalışmamalı")
+        #expect(plan[0].title == "“Giriş Yap” shouldn't work with an empty form")
 
         let buttons = (1...5).map { ScreenElement(query: "b\($0)", identifier: nil, name: "B\($0)", kind: "UIButton") }
         #expect(HeuristicPlanner.plan(PlanContext(focus: nil, screen: buttons)).count == 3)

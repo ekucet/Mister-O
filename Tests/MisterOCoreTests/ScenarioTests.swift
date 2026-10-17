@@ -58,17 +58,17 @@ struct ScenarioCatalogTests {
         do {
             _ = try ScenarioCatalog.decode(Data(missingName.utf8))
         } catch {
-            #expect(ScenarioCatalog.describe(error) == "scenarios[0].name alanı eksik.")
+            #expect(ScenarioCatalog.describe(error) == "scenarios[0].name is missing.")
         }
         do {
             _ = try ScenarioCatalog.decode(Data(missingSteps.utf8))
         } catch {
-            #expect(ScenarioCatalog.describe(error) == "'Ödeme' senaryosunda 'steps' ya da 'flow' gerekli.")
+            #expect(ScenarioCatalog.describe(error) == "Scenario 'Ödeme' needs 'steps' or 'flow'.")
         }
         do {
             _ = try ScenarioCatalog.decode(Data("{ oops".utf8))
         } catch {
-            #expect(ScenarioCatalog.describe(error) == "Katalog geçerli bir JSON değil.")
+            #expect(ScenarioCatalog.describe(error) == "The catalog isn't valid JSON.")
         }
     }
 }
@@ -161,10 +161,10 @@ struct ScenarioStoreTests {
         #expect(resets.value == 3)
         #expect(driver.actions == ["tap a", "tap b"])
         #expect(scenarios.map { store.runs[$0.id]?.state } == [.passed, .failed, .passed, .invalidScript])
-        #expect(store.runs[scenarios[1].id]?.failureMessage?.hasPrefix("Satır 1: Ekranda bulunamadı") == true)
+        #expect(store.runs[scenarios[1].id]?.failureMessage?.hasPrefix("Line 1: Not on screen") == true)
         #expect(store.suite?.isRunning == false)
         #expect(store.suite?.wasCancelled == false)
-        #expect(store.suiteReportText.contains("Suite · 2/4 başarılı"))
+        #expect(store.suiteReportText.contains("Suite · 2/4 passed"))
         #expect(store.suiteReportText.contains("✗ İki"))
     }
 

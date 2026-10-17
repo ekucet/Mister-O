@@ -126,25 +126,28 @@ public struct PlanContext: Sendable {
         self.answers = answers
     }
 
-    public static let instructions = """
+    /// Model başlık ve beklenen sonucu panelin dilinde (`MisterOLanguage.current`) yazar.
+    public static var instructions: String { """
     You are an iOS QA tester. Look at the elements on the current screen and propose up to 4 quick \
     checks a tester would run here.
     - Each check must be doable on this screen by tapping, typing and looking at the result.
     - Prefer checks that find bugs: empty or invalid input, disabled buttons, error messages, and the \
     main happy path.
     - A check that leaves this screen (for example a successful submit) must set leavesScreen to true.
-    - title: a short Turkish sentence that names the check. expectation: what should happen, in Turkish.
+    - title: a short \(MisterOLanguage.current.promptName) sentence that names the check. expectation: what \
+    should happen, in \(MisterOLanguage.current.promptName).
     - If the tester gave a focus, every check must be about it.
-    """
+    """ }
 
     /// Testçinin cümlesini tek bir kontrole çevirmek için.
-    public static let requestInstructions = """
+    public static var requestInstructions: String { """
     You turn a tester's request into one check for the current iOS screen.
-    - title: the request as a short Turkish sentence. Keep any values the tester gave.
-    - expectation: what should happen if the app works, as the tester described it, in Turkish. If the \
-    tester didn't say, infer the most likely result (for example the next screen opens).
+    - title: the request as a short \(MisterOLanguage.current.promptName) sentence. Keep any values the tester gave.
+    - expectation: what should happen if the app works, as the tester described it, in \
+    \(MisterOLanguage.current.promptName). If the tester didn't say, infer the most likely result (for example the \
+    next screen opens).
     - leavesScreen: true if success most likely opens another screen.
-    """
+    """ }
 
     public var prompt: String {
         var lines = ["Focus: \(focus ?? "(the whole screen)")"]
@@ -182,7 +185,8 @@ public struct AssistantContext: Sendable {
         return ["-"] + screen.map(\.query).filter { seen.insert($0).inserted }
     }
 
-    public static let instructions = """
+    /// Model mesajını panelin dilinde (`MisterOLanguage.current`) yazar.
+    public static var instructions: String { """
     You are an iOS QA tester running one check on the current app, one step at a time. Each turn you \
     get the check, what should happen, facts from the tester, the steps already done and the elements \
     visible now. Choose exactly one next action:
@@ -201,8 +205,8 @@ public struct AssistantContext: Sendable {
     - Ask only for data that must already exist in the system: an existing account and its password, \
     a verification code, an existing order number.
     - Obviously invalid values such as "abc" or "a@" are fine for negative checks.
-    - Finish within 8 steps. Write message in Turkish, in one short sentence.
-    """
+    - Finish within 8 steps. Write message in \(MisterOLanguage.current.promptName), in one short sentence.
+    """ }
 
     public var prompt: String {
         var lines = [
@@ -274,17 +278,22 @@ public enum HeuristicPlanner {
         let clauses = text.split(whereSeparator: { ";.,\n".contains($0) })
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
+        let turkish = { (word: Substring) in
+            word.hasSuffix("malı") || word.hasSuffix("meli") || word.hasSuffix("malıdır") || word.hasSuffix("melidir")
+        }
+        var isTurkish = false
         let expectation = clauses.last { clause in
             clause.lowercased().split(separator: " ").contains { word in
-                word.hasSuffix("malı") || word.hasSuffix("meli") || word.hasSuffix("malıdır")
-                    || word.hasSuffix("melidir") || word == "should" || word == "must"
+                if turkish(word) { isTurkish = true; return true }
+                return word == "should" || word == "must"
             }
         }
+        // Türkçe büyük harf: "ilerlemeli" → "İlerlemeli"; İngilizcede "it should…" "İt" olmasın.
+        let locale = Locale(identifier: isTurkish ? "tr_TR" : "en_US")
         return PlannedCheck(
             title: text,
-            // Türkçe büyük harf: "ilerlemeli" → "İlerlemeli" (varsayılan yerelde "I" olurdu).
-            expectation: expectation.map { $0.prefix(1).uppercased(with: Locale(identifier: "tr_TR")) + $0.dropFirst() + "." }
-                ?? "İstenen davranış gerçekleşmeli ve ekranda doğrulanmalı.",
+            expectation: expectation.map { $0.prefix(1).uppercased(with: locale) + $0.dropFirst() + "." }
+                ?? L("The requested behavior should happen and be verified on screen."),
             leavesScreen: true,
             request: text
         )
@@ -302,19 +311,19 @@ public enum HeuristicPlanner {
         if let lastField, let submit = buttons.first(where: { $0.offset > lastField })?.element ?? buttons.last?.element {
             let name = "“\(submit.name ?? submit.query)”"
             return [
-                PlannedCheck(title: "Boş formla \(name) çalışmamalı",
-                             expectation: "\(name) pasif kalmalı ya da bir hata mesajı görünmeli."),
-                PlannedCheck(title: "Geçersiz bilgilerle \(name) çalışmamalı",
-                             expectation: "Hata görünmeli ya da \(name) pasif kalmalı; ekran değişmemeli."),
-                PlannedCheck(title: "Geçerli bilgilerle \(name) çalışmalı",
-                             expectation: "Bir sonraki ekran açılmalı.", leavesScreen: true),
+                PlannedCheck(title: L("%@ shouldn't work with an empty form", name),
+                             expectation: L("%@ should stay disabled or an error message should appear.", name)),
+                PlannedCheck(title: L("%@ shouldn't work with invalid details", name),
+                             expectation: L("An error should appear or %@ should stay disabled; the screen shouldn't change.", name)),
+                PlannedCheck(title: L("%@ should work with valid details", name),
+                             expectation: L("The next screen should open."), leavesScreen: true),
             ]
         }
 
         return buttons.prefix(3).map { _, button in
             let name = "“\(button.name ?? button.query)”"
-            return PlannedCheck(title: "\(name) bir şey yapmalı",
-                                expectation: "Dokununca yeni bir ekran ya da görünür bir değişiklik olmalı.",
+            return PlannedCheck(title: L("%@ should do something", name),
+                                expectation: L("Tapping it should open a new screen or visibly change something."),
                                 leavesScreen: true)
         }
     }

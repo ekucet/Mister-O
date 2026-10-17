@@ -93,7 +93,7 @@ enum DeviceEnvironment {
         let device = UIDevice.current
         var model = device.model
         #if targetEnvironment(simulator)
-        model += " (Simülatör)"
+        model += " (" + L("Simulator") + ")"
         #endif
         let info = Bundle.main.infoDictionary
         let version = info?["CFBundleShortVersionString"] as? String ?? "?"

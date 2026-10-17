@@ -49,7 +49,7 @@ struct ScenarioListView: View {
             ScrollView {
                 LazyVStack(spacing: 6) {
                     if store.allScenarios.isEmpty {
-                        Text("Henüz senaryo yok. Asistan sekmesinde bir ekranı test edip geçen kontrolleri taslak olarak kaydedebilirsiniz.")
+                        Text(L("No scenarios yet. Test a screen in the Assistant tab and save the passing checks as drafts."))
                             .font(.footnote)
                             .foregroundStyle(Color.gray)
                     }
@@ -82,16 +82,16 @@ struct ScenarioListView: View {
             VStack(alignment: .leading, spacing: 2) {
                 switch store.status {
                 case .idle, .loading:
-                    Text("Senaryolar yükleniyor…").foregroundStyle(Color.gray)
+                    Text(L("Loading scenarios…")).foregroundStyle(Color.gray)
                 case .live(let date):
-                    Text("\(store.scenarios.count) senaryo · \(store.feed?.name ?? "") · \(date.formatted(date: .omitted, time: .shortened))")
+                    Text("\(L(store.scenarios.count, one: "%ld scenario", other: "%ld scenarios")) · \(store.feed?.name ?? "") · \(date.panelFormatted(date: .omitted, time: .shortened))")
                         .foregroundStyle(Color.gray)
                 case .cached(let savedAt, let error):
-                    Text("Çevrimdışı · \(savedAt.formatted(date: .abbreviated, time: .shortened)) önbelleği")
+                    Text(L("Offline · cache from %@", savedAt.panelFormatted(date: .abbreviated, time: .shortened)))
                         .foregroundStyle(.orange)
                     Text(error).foregroundStyle(Color.gray)
                 case .failed(let error):
-                    Text("Katalog yüklenemedi: \(error)").foregroundStyle(.red)
+                    Text(L("Couldn't load the catalog: %@", error)).foregroundStyle(.red)
                 }
             }
             .font(.caption)
@@ -106,18 +106,18 @@ struct ScenarioListView: View {
                 }
             }
             .disabled(store.status == .loading || isBusy)
-            .accessibilityLabel("Kataloğu yenile")
+            .accessibilityLabel(L("Refresh catalog"))
         }
     }
 
     private var draftsBar: some View {
         HStack(spacing: 6) {
-            Label("\(store.drafts.count) taslak (asistandan)", systemImage: "tray.full")
+            Label(L(store.drafts.count, one: "%ld draft (from the assistant)", other: "%ld drafts (from the assistant)"), systemImage: "tray.full")
                 .font(.caption)
                 .foregroundStyle(.indigo)
             Spacer()
             ShareLink(item: store.draftsCatalogJSON) {
-                Label("Taslakları paylaş", systemImage: "square.and.arrow.up")
+                Label(L("Share drafts"), systemImage: "square.and.arrow.up")
                     .font(.caption)
             }
         }
@@ -126,7 +126,7 @@ struct ScenarioListView: View {
     private var tagBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
-                tagChip(title: "Tümü", tag: nil)
+                tagChip(title: L("All"), tag: nil)
                 ForEach(store.tags, id: \.self) { tag in
                     tagChip(title: "#\(tag)", tag: tag)
                 }
@@ -149,7 +149,7 @@ struct ScenarioListView: View {
         HStack {
             if isBusy {
                 Button(role: .destructive, action: onStop) {
-                    Label("Durdur", systemImage: "stop.fill")
+                    Label(L("Stop"), systemImage: "stop.fill")
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(.red)
@@ -157,7 +157,7 @@ struct ScenarioListView: View {
                 Button {
                     onRunAll(runnable)
                 } label: {
-                    Label(selectedTag.map { "#\($0) çalıştır (\(runnable.count))" } ?? "Tümünü çalıştır (\(runnable.count))",
+                    Label(selectedTag.map { L("Run #%@ (%ld)", $0, runnable.count) } ?? L("Run all (%ld)", runnable.count),
                           systemImage: "play.fill")
                 }
                 .buttonStyle(.borderedProminent)
@@ -167,7 +167,7 @@ struct ScenarioListView: View {
             Spacer()
             let invalid = visible.count - runnable.count
             if invalid > 0 {
-                Text("\(invalid) hatalı senaryo atlanır")
+                Text(L(invalid, one: "%ld invalid scenario is skipped", other: "%ld invalid scenarios are skipped"))
                     .font(.caption2)
                     .foregroundStyle(.orange)
             }
@@ -175,7 +175,7 @@ struct ScenarioListView: View {
     }
 }
 
-/// Suite sırasında ilerleme, bitince "17/20 başarılı" özeti.
+/// Suite sırasında ilerleme, bitince "17/20 passed" özeti.
 private struct SuiteSummaryView: View {
     let suite: ScenarioStore.Suite
     let runs: [Scenario.ID: ScenarioStore.Run]
@@ -188,17 +188,17 @@ private struct SuiteSummaryView: View {
         VStack(alignment: .leading, spacing: 4) {
             if suite.isRunning {
                 let index = suite.currentIndex ?? 0
-                Text("Senaryo \(index + 1)/\(total) · \(suite.scenarios[index].name)")
+                Text(L("Scenario %ld/%ld · %@", index + 1, total, suite.scenarios[index].name))
                     .font(.caption.weight(.semibold))
                 ProgressView(value: Double(index), total: Double(max(total, 1)))
                     .tint(.blue)
             } else {
                 HStack(spacing: 6) {
                     Image(systemName: failed == 0 && !suite.wasCancelled ? "checkmark.seal.fill" : "xmark.seal.fill")
-                    Text("\(passed)/\(total) başarılı")
-                    if failed > 0 { Text("· \(failed) başarısız") }
+                    Text(L("%ld/%ld passed", passed, total))
+                    if failed > 0 { Text("· " + L("%ld failed", failed)) }
                     if let elapsed = suite.elapsed { Text("· \(elapsed.compactText)") }
-                    if suite.wasCancelled { Text("· durduruldu") }
+                    if suite.wasCancelled { Text("· " + L("stopped")) }
                 }
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(failed == 0 && !suite.wasCancelled ? Color.green : Color.red)
@@ -235,7 +235,7 @@ private struct ScenarioRow: View {
                         Text(scenario.name)
                             .font(.subheadline.weight(.semibold))
                         if isDraft {
-                            Text("Taslak")
+                            Text(L("Draft"))
                                 .font(.caption2.weight(.semibold))
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
@@ -253,7 +253,7 @@ private struct ScenarioRow: View {
                         .font(.caption2)
                         .foregroundStyle(Color.gray)
                     if !validation.isValid {
-                        Text("\(validation.issues.count) satır hatalı; düzeltilene kadar çalıştırılamaz")
+                        Text(L(validation.issues.count, one: "%ld line has errors; it can't run until fixed", other: "%ld lines have errors; it can't run until fixed"))
                             .font(.caption2)
                             .foregroundStyle(.red)
                     } else if let run, run.state != .passed, let failure = run.failureMessage {
@@ -271,7 +271,7 @@ private struct ScenarioRow: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(canRun && validation.isValid ? Color.indigo : Color.gray)
                 .disabled(!canRun || !validation.isValid)
-                .accessibilityLabel("\(scenario.name) senaryosunu çalıştır")
+                .accessibilityLabel(L("Run scenario %@", scenario.name))
             }
 
             if isExpanded {
@@ -285,9 +285,9 @@ private struct ScenarioRow: View {
     }
 
     private var meta: String {
-        let steps = validation.isValid ? "\(validation.stepCount) adım" : "akış hatalı"
+        let steps = validation.isValid ? L(validation.stepCount, one: "%ld step", other: "%ld steps") : L("invalid flow")
         let tags = scenario.tags.map { "#\($0)" }.joined(separator: " ")
-        let reset = scenario.resetsApp ? "" : " · reset yok"
+        let reset = scenario.resetsApp ? "" : " · " + L("no reset")
         return [steps, tags].filter { !$0.isEmpty }.joined(separator: " · ") + reset
     }
 
@@ -306,7 +306,7 @@ private struct ScenarioRow: View {
             }
             if canRepair, let run, run.state != .passed, run.state != .cancelled {
                 Button(action: onRepair) {
-                    Label("Asistanla onar", systemImage: "wrench.and.screwdriver")
+                    Label(L("Repair with assistant"), systemImage: "wrench.and.screwdriver")
                 }
                 .font(.caption)
                 .buttonStyle(.borderedProminent)
@@ -314,14 +314,14 @@ private struct ScenarioRow: View {
             }
             HStack(spacing: 6) {
                 Button(action: onEdit) {
-                    Label("Editöre al", systemImage: "square.and.pencil")
+                    Label(L("Open in editor"), systemImage: "square.and.pencil")
                 }
                 if isDraft {
                     ShareLink(item: ScenarioCatalog.entry(for: scenario)) {
-                        Label("Paylaş", systemImage: "square.and.arrow.up")
+                        Label(L("Share"), systemImage: "square.and.arrow.up")
                     }
                     Button(role: .destructive, action: onDelete) {
-                        Label("Sil", systemImage: "trash")
+                        Label(L("Delete"), systemImage: "trash")
                     }
                 }
             }
@@ -347,6 +347,13 @@ private struct ScenarioRow: View {
                 Image(systemName: "circle").foregroundStyle(Color.gray)
             }
         }
+    }
+}
+
+private extension Date {
+    /// Panelin dilinde ("14:05", "17 Eki 2026 14:05").
+    func panelFormatted(date: Date.FormatStyle.DateStyle, time: Date.FormatStyle.TimeStyle) -> String {
+        formatted(Date.FormatStyle(date: date, time: time, locale: MisterOLanguage.current.locale))
     }
 }
 #endif
