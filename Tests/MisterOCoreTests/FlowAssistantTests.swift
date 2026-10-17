@@ -90,9 +90,10 @@ struct FlowAssistantTests {
                            navigator: FakeNavigator = FakeNavigator(),
                            resetApp: (@MainActor () async -> Void)? = nil,
                            appFacts: [AssistantAnswer] = [],
-                           memory: (any AssistantMemory)? = nil) -> FlowAssistant {
+                           memory: (any AssistantMemory)? = nil,
+                           screenshot: (@MainActor () -> Data?)? = nil) -> FlowAssistant {
         FlowAssistant(model: model, runner: InAppTestRunner(driver: driver, configuration: fast),
-                      screen: screen(driver), navigator: navigator, resetApp: resetApp,
+                      screen: screen(driver), screenshot: screenshot, navigator: navigator, resetApp: resetApp,
                       appFacts: appFacts, memory: memory, settleTime: .zero)
     }
 
@@ -304,6 +305,32 @@ struct FlowAssistantTests {
         await waitUntilIdle(assistant)
         #expect(assistant.checks[0].issueReceipt == nil)
         #expect(assistant.checks[0].isSaved == false)
+    }
+
+    @Test func attachesTheScreenshotOfAnIssue() async {
+        let driver = FakeDriver()
+        driver.visible = ["a"]
+        let broken = PlannedCheck(title: "bozuk", expectation: "x görünmeli")
+        let fine = PlannedCheck(title: "sağlam", expectation: "a görünmeli")
+        let model = ScriptedModel(plan: [broken, fine], decisions: [
+            broken.title: [.init(action: .issue, target: "-", message: "x yok")],
+            fine.title: [.init(action: .pass, target: "-")],
+        ])
+        let png = Data("png".utf8)
+        let assistant = assistant(model, driver, screenshot: { png })
+        assistant.explore()
+        await waitUntilIdle(assistant)
+
+        // Yalnızca sorunla biten kontrolün görüntüsü alınır ve hata kaydına eklenir.
+        #expect(assistant.checks.map(\.screenshot) == [png, nil])
+        #expect(assistant.bugReport(for: assistant.checks[0], environment: "test").attachments
+                == [BugReport.Attachment(filename: "screenshot.png", mimeType: "image/png", data: png)])
+        #expect(assistant.bugReport(for: assistant.checks[1], environment: "test").attachments.isEmpty)
+
+        await model.add([.init(action: .pass, target: "-")], for: broken.title)
+        assistant.retry(assistant.checks[0].id)
+        await waitUntilIdle(assistant)
+        #expect(assistant.checks[0].screenshot == nil)
     }
 
     @Test func runsTheTesterRequestAsOneCheck() async {

@@ -40,7 +40,7 @@ wait: 1.5
   reports issues with a ready bug report, and saves passing checks as draft scenarios. It can also
   repair a failing scenario. Beta; see [AI test assistant](#ai-test-assistant).
 - **Tickets in one tap.** Plug in your tracker (Jira, Linear, GitHub Issues…) and a found issue
-  becomes a ticket with steps, expected and actual result and the device.
+  becomes a ticket with steps, expected and actual result, the device and a screenshot.
 - **Waits for you.** `tap`, `type` and `assertVisible` wait until the element shows up or becomes
   enabled, so flows don't need sleeps after every navigation.
 - **Clear results.** Each step is shown as passed, failed or skipped, with its line number,
@@ -385,6 +385,10 @@ Pass an `issueReporter`, and every issue in the report gets a **Kayıt aç** (Op
 key and link of the opened ticket appear in the report, for example *Kayıt açıldı: QA-42*. Each issue
 is opened once; if it fails, the error is shown and the tester can tap again.
 
+When a check ends with an issue, the assistant takes a screenshot of the app's key window. Mister-O's
+own panel and bubble are left out. The issue card shows it as a thumbnail, and it goes to the tracker
+as `screenshot.png` in `BugReport.attachments`.
+
 The built-in `WebhookIssueReporter` posts the bug report as JSON to a URL you choose:
 
 ```swift
@@ -404,29 +408,77 @@ The built-in `WebhookIssueReporter` posts the bug report as JSON to a URL you ch
   "expected": "Hata görünmeli ya da “Giriş Yap” pasif kalmalı; ekran değişmemeli.",
   "actual": "Geçersiz e-postayla (a@) giriş yapılabildi; ana sayfa açıldı.",
   "environment": "iPhone (Simülatör) · iOS 27.0 · app.mistero.demo 1.0 (1)",
-  "description": "The same report as plain text, ready for the ticket body"
+  "description": "The same report as plain text, ready for the ticket body",
+  "attachments": [
+    { "filename": "screenshot.png", "mimeType": "image/png", "data": "iVBORw0KGgoAAAANSUhEUg…" }
+  ]
 }
 ```
+
+`data` is the file in base64, and `attachments` is empty when there is no screenshot. The other fields
+are the same as before. The screenshot makes the body much larger; if your endpoint can't take that,
+pass `includesAttachments: false`.
 
 If the response is JSON with `key` and `url` (or Jira's `self`), the report links to the ticket.
 Where to point the webhook:
 
 - **Jira:** an Automation rule with the *Incoming webhook* trigger and a *Create issue* action that
   uses `{{webhookData.title}}` and `{{webhookData.description}}`. Automation answers before the rule
-  runs, so the report says *Kayıt açıldı* without a key.
+  runs, so the report says *Kayıt açıldı* without a key. Automation can't turn the base64 screenshot
+  into an attachment, so on this route the ticket arrives without it.
 - **Zapier, Make or n8n:** a webhook trigger that creates the issue in Linear, GitHub Issues, Azure
   DevOps or anywhere else.
-- **Your own backend:** creates the ticket with the tracker's API and returns `{"key": …, "url": …}`.
+- **Your own backend:** creates the ticket with the tracker's API, uploads `attachments` and returns
+  `{"key": …, "url": …}`. This is the way to get the screenshot into Jira without a token in the app.
 
 A webhook keeps tracker credentials out of the app: anything in a staging build can be extracted, and
-the webhook can only create tickets. To call a tracker directly, conform to `IssueReporter`:
+the webhook can only create tickets. That is why it is the recommended path.
+
+#### Straight to Jira Cloud
+
+`JiraIssueReporter` is opt-in. It calls the Jira Cloud REST API v3 from the app:
+
+```swift
+#if STAGING
+.misterOTestPanel(
+    issueReporter: JiraIssueReporter(
+        baseURL: URL(string: "https://yourcompany.atlassian.net")!,
+        projectKey: "QA",
+        issueType: "Bug",                                    // the issue type's name in the project
+        authorization: JiraIssueReporter.basicAuthorization(email: "mistero-bot@yourcompany.com",
+                                                            apiToken: "…")
+    )
+)
+#endif
+```
+
+1. `POST /rest/api/3/issue` creates the issue. The summary is the report title, and the description
+   (in Atlassian Document Format) lists the steps, expected and actual result and the device.
+2. `POST /rest/api/3/issue/{key}/attachments` (with `X-Atlassian-Token: no-check`) uploads the
+   screenshot.
+
+The report links to `…/browse/QA-42`. If Jira rejects the issue (a wrong project key or issue type,
+for example), the error is shown as Jira words it. If only the upload fails, the ticket still counts as
+opened, so a second tap doesn't create a duplicate, and the report says why under the key.
+`authorization` is the whole `Authorization` header value, so `Bearer …` works too. Jira Data Center
+has no REST v3; use a webhook there.
+
+> [!WARNING]
+> The token ships inside the app. Anything in a staging build can be extracted: the binary, its
+> strings, environment values, the Keychain. Whoever has the token can do everything its account can
+> do in Jira, not just open tickets. Prefer the webhook. If you use `JiraIssueReporter`, give it the
+> token of a separate account that can only create issues in that one project, keep it out of release
+> builds, and revoke the token if a build leaks.
+
+For other trackers, conform to `IssueReporter`. `report.attachments` holds the screenshot:
 
 ```swift
 struct LinearReporter: IssueReporter {
     let name = "Linear"
 
     func open(_ report: BugReport) async throws -> IssueReceipt {
-        // Create the issue from report.title and report.text, then return its key and link.
+        // Create the issue from report.title and report.text, upload report.attachments,
+        // then return its key and link.
     }
 }
 ```
@@ -493,8 +545,10 @@ With a remote model, the screen's element names and the tester's answers leave t
 ### Status
 
 - The assistant (planning order, issues, questions and re-runs, returning to the start screen, stopping,
-  bug reports, drafts, described checks, remembered facts, repairs, opening tickets) is covered by unit
-  tests with a scripted model.
+  bug reports, drafts, described checks, remembered facts, repairs, opening tickets, screenshots) is
+  covered by unit tests with a scripted model. The requests `WebhookIssueReporter` and
+  `JiraIssueReporter` send are unit-tested; `JiraIssueReporter` hasn't been run against a live Jira
+  site yet.
 - On the iOS 27 simulator, the demo's rule-based model (`MISTERO_ASSISTANT=demo`) ran the whole loop:
   three checks with no questions thanks to `testData`, the "a@" bug found and turned into a ticket
   through a local webhook, a described "fill the fields and continue" check, drafts saved and run, and a
@@ -585,7 +639,7 @@ MisterOCore  (Foundation only, unit-tested on macOS)
 ├── FlowAssistant       plans checks for the screen, runs them, reports, continues with the tester
 ├── FlowAssistantModel  protocol for the language model behind the assistant
 ├── AppleFlowAssistantModel  Apple on-device model with guided generation (iOS 26+)
-└── IssueReporter       turns a found issue into a ticket (WebhookIssueReporter built in)
+└── IssueReporter       turns a found issue into a ticket (WebhookIssueReporter, JiraIssueReporter)
 
 MisterO  (UIKit + SwiftUI)
 ├── UIKitDriver         UIDriver = ViewResolver + ActionExecutor
@@ -593,6 +647,7 @@ MisterO  (UIKit + SwiftUI)
 ├── ActionExecutor      performs tap / type through public UIKit APIs
 ├── AccessibilityBootstrap  makes SwiftUI elements visible to the resolver
 ├── ScreenAnchor        brings the assistant back to its start screen; Keychain memory for answers
+├── ScreenCapture       screenshot of the app's key window for tickets (the overlay is left out)
 └── Panel               SwiftUI panel in a separate overlay window
 ```
 

@@ -2,19 +2,36 @@ import Foundation
 
 /// Asistanın bulduğu bir sorunun hata kaydı.
 public struct BugReport: Equatable, Codable, Sendable {
+    /// Kayda eklenecek dosya; asistan sorunun ekran görüntüsünü (`screenshot.png`) ekler.
+    public struct Attachment: Equatable, Codable, Sendable {
+        public let filename: String
+        public let mimeType: String
+        /// JSON'da base64 olarak yazılır.
+        public let data: Data
+
+        public init(filename: String, mimeType: String, data: Data) {
+            self.filename = filename
+            self.mimeType = mimeType
+            self.data = data
+        }
+    }
+
     public let title: String
     /// Denenen adımlar sırasıyla; düşen adımın yanında nedeni yazar.
     public let steps: [String]
     public let expected: String
     public let actual: String
     public let environment: String
+    public let attachments: [Attachment]
 
-    public init(title: String, steps: [String], expected: String, actual: String, environment: String) {
+    public init(title: String, steps: [String], expected: String, actual: String, environment: String,
+                attachments: [Attachment] = []) {
         self.title = title
         self.steps = steps
         self.expected = expected
         self.actual = actual
         self.environment = environment
+        self.attachments = attachments
     }
 
     /// Jira, Slack ya da e-postaya yapıştırılacak düz metin.
@@ -33,14 +50,30 @@ public struct BugReport: Equatable, Codable, Sendable {
     }
 }
 
+extension BugReport {
+    /// Ekleri olmadan yazılmış eski kayıtlar da okunabilsin.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(title: try container.decode(String.self, forKey: .title),
+                  steps: try container.decode([String].self, forKey: .steps),
+                  expected: try container.decode(String.self, forKey: .expected),
+                  actual: try container.decode(String.self, forKey: .actual),
+                  environment: try container.decode(String.self, forKey: .environment),
+                  attachments: try container.decodeIfPresent([Attachment].self, forKey: .attachments) ?? [])
+    }
+}
+
 /// Açılan kaydın kimliği: "PROJ-123" ve/veya bağlantısı.
 public struct IssueReceipt: Equatable, Sendable {
     public let key: String?
     public let url: URL?
+    /// Kayıt açıldı ama bir şey eksik kaldı ("Ekran görüntüsü eklenemedi: …"); panelde kaydın altında görünür.
+    public let warning: String?
 
-    public init(key: String?, url: URL?) {
+    public init(key: String?, url: URL?, warning: String? = nil) {
         self.key = key
         self.url = url
+        self.warning = warning
     }
 }
 
@@ -55,25 +88,26 @@ public protocol IssueReporter: Sendable {
 /// Kaydı bir webhook'a JSON olarak gönderir. Jira Automation'ın "Incoming webhook" tetikleyicisi, Zapier,
 /// Make ya da kendi sunucunuz bu JSON'dan kaydı açar; staging uygulamasına Jira API token'ı koymanız gerekmez.
 ///
-/// Gövde: `{ "title", "steps": [..], "expected", "actual", "environment", "description" }`.
+/// Gövde: `{ "title", "steps": [..], "expected", "actual", "environment", "description", "attachments": [..] }`.
+/// `attachments` elemanları `{ "filename", "mimeType", "data" }`, `data` base64'tür.
 /// Cevap JSON'unda `key` ve `url` (ya da Jira'nın `self`) alanları varsa panelde gösterilir.
 public struct WebhookIssueReporter: IssueReporter {
     public let name: String
     public let url: URL
     public let headers: [String: String]
+    /// `false` ise ekran görüntüsü gönderilmez (`attachments` boş gelir); büyük gövdeyi kabul etmeyen
+    /// webhook'lar için.
+    public let includesAttachments: Bool
 
-    public init(name: String = "Jira", url: URL, headers: [String: String] = [:]) {
+    public init(name: String = "Jira", url: URL, headers: [String: String] = [:], includesAttachments: Bool = true) {
         self.name = name
         self.url = url
         self.headers = headers
+        self.includesAttachments = includesAttachments
     }
 
     public func open(_ report: BugReport) async throws -> IssueReceipt {
-        let (data, response) = try await URLSession.shared.data(for: try request(for: report))
-        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            throw IssueReporterError.httpStatus(http.statusCode)
-        }
-        return Self.receipt(from: data)
+        Self.receipt(from: try await IssueHTTP.send(try request(for: report)))
     }
 
     func request(for report: BugReport) throws -> URLRequest {
@@ -84,8 +118,9 @@ public struct WebhookIssueReporter: IssueReporter {
             let actual: String
             let environment: String
             let description: String
+            let attachments: [BugReport.Attachment]
         }
-        var request = URLRequest(url: url, timeoutInterval: 20)
+        var request = URLRequest(url: url, timeoutInterval: 30)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         for (field, value) in headers {
@@ -93,7 +128,8 @@ public struct WebhookIssueReporter: IssueReporter {
         }
         request.httpBody = try JSONEncoder().encode(Payload(
             title: report.title, steps: report.steps, expected: report.expected, actual: report.actual,
-            environment: report.environment, description: report.text
+            environment: report.environment, description: report.text,
+            attachments: includesAttachments ? report.attachments : []
         ))
         return request
     }
@@ -107,14 +143,35 @@ public struct WebhookIssueReporter: IssueReporter {
     }
 }
 
+enum IssueHTTP {
+    /// İsteği gönderir; 2xx dışında hata fırlatır. `message`, sunucunun hata gövdesinden okunur bir neden çıkarır.
+    static func send(_ request: URLRequest, message: (Data) -> String? = { _ in nil }) async throws -> Data {
+        let (data, response) = try await URLSession.shared.data(for: request)
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            if let message = message(data) {
+                throw IssueReporterError.rejected(status: http.statusCode, message: message)
+            }
+            throw IssueReporterError.httpStatus(http.statusCode)
+        }
+        return data
+    }
+}
+
 public enum IssueReporterError: Error, Equatable, Sendable {
     case httpStatus(Int)
+    /// Sunucu isteği nedenini söyleyerek reddetti (Jira: "issuetype: Specify an issue type").
+    case rejected(status: Int, message: String)
 }
 
 extension IssueReporterError: LocalizedError {
     public var errorDescription: String? {
+        "Kayıt açılamadı: \(reason)"
+    }
+
+    var reason: String {
         switch self {
-        case .httpStatus(let code): "Kayıt açılamadı: sunucu \(code) döndü."
+        case .httpStatus(let code): "sunucu \(code) döndü."
+        case .rejected(let code, let message): "sunucu \(code) döndü (\(message))."
         }
     }
 }
