@@ -196,15 +196,15 @@ public final class FlowAssistant: ObservableObject {
         return summary
     }
 
-    /// "3 kontrol · 1 geçti · 1 sorun · 1 bilgi bekliyor"
+    /// "3 checks · 1 passed · 1 issue · 1 waiting for input" (Türkçede "3 kontrol · 1 geçti · …")
     public var summaryText: String {
         let s = summary
-        var parts = ["\(s.total) kontrol"]
-        if s.passed > 0 { parts.append("\(s.passed) geçti") }
-        if s.issues > 0 { parts.append("\(s.issues) sorun") }
-        if s.needsInput > 0 { parts.append("\(s.needsInput) bilgi bekliyor") }
-        if s.blocked > 0 { parts.append("\(s.blocked) sürdürülemedi") }
-        if s.skipped > 0 { parts.append("\(s.skipped) atlandı") }
+        var parts = [L(s.total, one: "%ld check", other: "%ld checks")]
+        if s.passed > 0 { parts.append(L("%ld passed", s.passed)) }
+        if s.issues > 0 { parts.append(L(s.issues, one: "%ld issue", other: "%ld issues")) }
+        if s.needsInput > 0 { parts.append(L("%ld waiting for input", s.needsInput)) }
+        if s.blocked > 0 { parts.append(L("%ld blocked", s.blocked)) }
+        if s.skipped > 0 { parts.append(L("%ld skipped", s.skipped)) }
         return parts.joined(separator: " · ")
     }
 
@@ -243,10 +243,11 @@ public final class FlowAssistant: ObservableObject {
         let goal = scenario.goal ?? [scenario.name, scenario.summary].compactMap { $0 }.joined(separator: ". ")
         let oldSteps = scenario.script.split(whereSeparator: \.isNewline).joined(separator: "; ")
         let plan = PlannedCheck(
-            title: "Onar: \(scenario.name)",
-            expectation: scenario.summary ?? "Senaryonun amacı gerçekleşmeli ve ekranda doğrulanmalı.",
+            title: L("Repair: %@", scenario.name),
+            expectation: scenario.summary ?? L("The scenario's goal should be reached and verified on screen."),
             leavesScreen: true,
-            request: "\(goal)\n(Eski adımlar, artık çalışmıyor olabilir: \(oldSteps))"
+            // Modele giden metin; `scenario(for:)` hedefi "\n(" öncesinden geri okur.
+            request: "\(goal)\n(Old steps, they may no longer work: \(oldSteps))"
         )
         defer { nextID += 1 }
         checks.append(Check(id: nextID, plan: plan, repairs: scenario))
@@ -321,7 +322,7 @@ public final class FlowAssistant: ObservableObject {
         task = nil
         runner.cancel()
         for index in checks.indices where !checks[index].status.isFinished {
-            checks[index].status = .skipped("Durduruldu.")
+            checks[index].status = .skipped(L("Stopped."))
             checks[index].currentLine = nil
         }
         if isWorking {
@@ -373,7 +374,7 @@ public final class FlowAssistant: ObservableObject {
             planned = try await model.plan(for: context)
         } catch {
             if Task.isCancelled { return }
-            stage = .failed("Kontroller planlanamadı: \(error.localizedDescription)")
+            stage = .failed(L("Couldn't plan checks: %@", error.localizedDescription))
             return
         }
         if Task.isCancelled { return }
@@ -384,7 +385,7 @@ public final class FlowAssistant: ObservableObject {
         // Ekrandan ayrılan kontroller (başarılı giriş gibi) sona: önce ekranda kalanlar koşar.
         planned = planned.filter { !$0.leavesScreen } + planned.filter(\.leavesScreen)
         guard !planned.isEmpty else {
-            stage = .failed("Bu ekranda test edilecek bir şey bulunamadı.")
+            stage = .failed(L("Found nothing to test on this screen."))
             return
         }
         checks = planned.map(makeCheck)
@@ -397,7 +398,7 @@ public final class FlowAssistant: ObservableObject {
             if Task.isCancelled { return }
             guard await returnToStart() else {
                 for pending in checks.indices where checks[pending].status == .pending {
-                    checks[pending].status = .skipped("Başlangıç ekranına dönülemedi.")
+                    checks[pending].status = .skipped(L("Couldn't return to the start screen."))
                 }
                 break
             }
@@ -449,24 +450,24 @@ public final class FlowAssistant: ObservableObject {
                 decision = try await model.nextDecision(for: context)
             } catch {
                 if Task.isCancelled { return }
-                checks[index].status = .blocked("Model hata verdi: \(error.localizedDescription)")
+                checks[index].status = .blocked(L("The model returned an error: %@", error.localizedDescription))
                 return
             }
             if Task.isCancelled { return }
 
             switch decision.action {
             case .ask:
-                checks[index].status = .needsInput(decision.message?.nonEmpty ?? "Devam etmek için bilgiye ihtiyacım var.")
+                checks[index].status = .needsInput(decision.message?.nonEmpty ?? L("I need some information to continue."))
                 return
             case .pass:
-                checks[index].status = .passed(decision.message?.nonEmpty ?? "Beklenen davranış görüldü.")
+                checks[index].status = .passed(decision.message?.nonEmpty ?? L("The expected behavior was seen."))
                 return
             case .issue:
                 checks[index].screenshot = captureScreenshot?()
-                checks[index].status = .issue(decision.message?.nonEmpty ?? "Beklenen davranış görülmedi.")
+                checks[index].status = .issue(decision.message?.nonEmpty ?? L("The expected behavior wasn't seen."))
                 return
             case .blocked:
-                checks[index].status = .blocked(decision.message?.nonEmpty ?? "Kontrol sürdürülemedi.")
+                checks[index].status = .blocked(decision.message?.nonEmpty ?? L("The check couldn't continue."))
                 return
             case .tap, .type, .assertVisible, .assertNotVisible, .assertEnabled, .assertDisabled:
                 break
@@ -476,7 +477,7 @@ public final class FlowAssistant: ObservableObject {
                 lastIssue = "Your last answer had no valid target from the screen list."
                 failures += 1
                 if failures >= maxFailuresInARow {
-                    checks[index].status = .blocked("Asistan bu ekranda geçerli bir adım bulamadı.")
+                    checks[index].status = .blocked(L("The assistant found no valid step on this screen."))
                     return
                 }
                 continue
@@ -492,7 +493,7 @@ public final class FlowAssistant: ObservableObject {
                 lastIssue = "'\(line)' failed: \(failure)"
                 failures += 1
                 if failures >= maxFailuresInARow {
-                    checks[index].status = .blocked("Üst üste \(failures) adım başarısız oldu: \(failure)")
+                    checks[index].status = .blocked(L("%ld steps in a row failed: %@", failures, failure))
                     return
                 }
             } else {
@@ -502,7 +503,7 @@ public final class FlowAssistant: ObservableObject {
             }
             try? await Task.sleep(for: settleTime)
         }
-        checks[index].status = .blocked("Adım sınırına (\(maxStepsPerCheck)) ulaşıldı.")
+        checks[index].status = .blocked(L("Reached the step limit (%ld).", maxStepsPerCheck))
     }
 
     /// Adımı çalıştırır; geçerse `nil`, düşerse nedenini döner.
@@ -537,7 +538,7 @@ public final class FlowAssistant: ObservableObject {
     /// `resetApp` varsa senaryo her koşudan önce reset'lenir; aksi hâlde kaydedildiği ekrandan başlamalıdır.
     public func scenario(for check: Check) -> Scenario? {
         guard !check.steps.isEmpty else { return nil }
-        return Scenario(name: check.title, summary: check.plan.expectation, tags: ["taslak", "asistan"],
+        return Scenario(name: check.title, summary: check.plan.expectation, tags: [L("draft"), L("assistant")],
                         resetsApp: resetApp != nil && navigator.startIsAppRoot,
                         goal: check.plan.request?.components(separatedBy: "\n(").first ?? check.title,
                         script: check.steps.joined(separator: "\n"))
@@ -551,19 +552,19 @@ public final class FlowAssistant: ObservableObject {
         case .pending, .running: "-"
         }
         let steps = check.attempts.map { attempt in
-            attempt.line + (attempt.passed ? "" : "  ← \(attempt.note ?? "başarısız")")
+            attempt.line + (attempt.passed ? "" : "  ← \(attempt.note ?? L("failed"))")
         }
         let attachments = check.screenshot.map { [BugReport.Attachment(filename: "screenshot.png", mimeType: "image/png",
                                                                        data: $0)] } ?? []
-        return BugReport(title: "\(check.title): beklenen davranış görülmedi", steps: steps,
+        return BugReport(title: L("%@: expected behavior not seen", check.title), steps: steps,
                          expected: check.plan.expectation, actual: actual, environment: environment,
                          attachments: attachments)
     }
 
     /// Tüm raporun düz metni.
     public var reportText: String {
-        var lines = ["Mister-O asistan raporu · \(summaryText)"]
-        if let focus { lines.append("Odak: \(focus)") }
+        var lines = [L("Mister-O assistant report · %@", summaryText)]
+        if let focus { lines.append(L("Focus: %@", focus)) }
         for check in checks {
             let (symbol, message): (String, String?) = switch check.status {
             case .passed(let message): ("✓", message)

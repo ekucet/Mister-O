@@ -40,12 +40,12 @@ public struct BugReport: Equatable, Codable, Sendable {
         return """
         \(title)
 
-        Adımlar:
-        \(numbered.isEmpty ? "(adım yok)" : numbered.joined(separator: "\n"))
+        \(L("Steps")):
+        \(numbered.isEmpty ? L("(no steps)") : numbered.joined(separator: "\n"))
 
-        Beklenen: \(expected)
-        Gerçekleşen: \(actual)
-        Ortam: \(environment)
+        \(L("Expected")): \(expected)
+        \(L("Actual")): \(actual)
+        \(L("Environment")): \(environment)
         """
     }
 }
@@ -165,13 +165,13 @@ public enum IssueReporterError: Error, Equatable, Sendable {
 
 extension IssueReporterError: LocalizedError {
     public var errorDescription: String? {
-        "Kayıt açılamadı: \(reason)"
+        L("Couldn't open the ticket: %@", reason)
     }
 
     var reason: String {
         switch self {
-        case .httpStatus(let code): "sunucu \(code) döndü."
-        case .rejected(let code, let message): "sunucu \(code) döndü (\(message))."
+        case .httpStatus(let code): L("the server returned %ld.", code)
+        case .rejected(let code, let message): L("the server returned %ld (%@).", code, message)
         }
     }
 }

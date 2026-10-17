@@ -82,17 +82,17 @@ struct FlowParserTests {
             _ = try parser.parse(script)
         } catch {
             #expect(error.issues.map(\.line) == [2, 3, 4, 5, 6, 7])
-            #expect(error.issues[0].message.contains("Bilinmeyen komut 'tapp'"))
-            #expect(error.issues[1].message.contains("'->' eksik"))
-            #expect(error.issues[2].message.contains("Geçersiz süre"))
-            #expect(error.issues[3].message.contains("Kapanmamış tırnak"))
-            #expect(error.issues[4].message.contains("Değer eksik"))
-            #expect(error.issues[5].message.contains("Beklenmeyen içerik"))
+            #expect(error.issues[0].message.contains("Unknown command 'tapp'"))
+            #expect(error.issues[1].message.contains("Missing '->'"))
+            #expect(error.issues[2].message.contains("Invalid duration"))
+            #expect(error.issues[3].message.contains("Unclosed quote"))
+            #expect(error.issues[4].message.contains("Missing value"))
+            #expect(error.issues[5].message.contains("Unexpected content"))
         }
     }
 
     @Test func rejectsEmptyScriptAndOutOfRangeWait() {
-        #expect(throws: FlowParseError(issues: [.init(line: nil, message: "Çalıştırılacak adım yok.")])) {
+        #expect(throws: FlowParseError(issues: [.init(line: nil, message: "There are no steps to run.")])) {
             try parser.parse("# sadece yorum\n\n")
         }
         #expect(throws: FlowParseError.self) { try parser.parse("wait: -1") }

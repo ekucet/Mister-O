@@ -31,7 +31,7 @@ struct AssistantView: View {
                 case .idle:
                     ScrollView { intro }
                 case .planning:
-                    busyRow("Ekran inceleniyor, kontroller planlanıyor…")
+                    busyRow(L("Looking at the screen, planning checks…"))
                 case .running, .finished, .failed:
                     report
                 }
@@ -44,22 +44,22 @@ struct AssistantView: View {
 
     private var intro: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Asistan bu ekranı kendisi test eder: birkaç kontrol planlar, koşar ve kısa bir rapor verir. Gerekirse soru sorar.")
+            Text(L("The assistant tests this screen by itself: it plans a few checks, runs them and gives a short report. It asks if it needs something."))
                 .font(.footnote)
                 .foregroundStyle(Color.gray)
 
             Button {
                 start()
             } label: {
-                Label("Bu ekranı test et", systemImage: "sparkles")
+                Label(L("Test this screen"), systemImage: "sparkles")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .tint(.indigo)
 
-            requestField(placeholder: "ya da tarif edin: alanları doldur, Kaydet'e bas; sonraki ekran açılmalı",
-                         button: "Test et")
+            requestField(placeholder: L("or describe one: fill in the fields, tap Save; the next screen should open"),
+                         button: L("Test"))
 
             facts
         }
@@ -71,10 +71,10 @@ struct AssistantView: View {
         if !assistant.knownFacts.isEmpty {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text("Bildiklerim").font(.caption.weight(.semibold))
+                    Text(L("What I know")).font(.caption.weight(.semibold))
                     Spacer()
                     if !assistant.answers.isEmpty {
-                        Button("Hepsini unut", role: .destructive) { assistant.forgetAll() }
+                        Button(L("Forget all"), role: .destructive) { assistant.forgetAll() }
                             .font(.caption)
                     }
                 }
@@ -94,7 +94,7 @@ struct AssistantView: View {
                         } label: {
                             Image(systemName: "xmark.circle.fill").foregroundStyle(Color.gray)
                         }
-                        .accessibilityLabel("Unut")
+                        .accessibilityLabel(L("Forget"))
                     }
                 }
             }
@@ -152,7 +152,7 @@ struct AssistantView: View {
         return HStack(spacing: 8) {
             if assistant.isWorking {
                 ProgressView().controlSize(.small)
-                Text("Test ediliyor · \(done)/\(assistant.checks.count)")
+                Text(L("Testing · %ld/%ld", done, assistant.checks.count))
             } else {
                 Image(systemName: summary.issues > 0 ? "exclamationmark.triangle.fill" : "checkmark.seal.fill")
                     .foregroundStyle(summary.issues > 0 ? Color.red : Color.green)
@@ -160,7 +160,7 @@ struct AssistantView: View {
             }
             Spacer()
             if assistant.isWorking {
-                Button("Durdur", role: .destructive) { assistant.stop() }
+                Button(L("Stop"), role: .destructive) { assistant.stop() }
             } else {
                 Button {
                     UIPasteboard.general.string = assistant.reportText
@@ -168,19 +168,19 @@ struct AssistantView: View {
                 } label: {
                     Image(systemName: reportCopied ? "checkmark" : "doc.on.doc")
                 }
-                .accessibilityLabel("Raporu kopyala")
+                .accessibilityLabel(L("Copy report"))
                 Button {
                     start()
                 } label: {
                     Image(systemName: "arrow.clockwise")
                 }
-                .accessibilityLabel("Ekranı yeniden test et")
+                .accessibilityLabel(L("Test the screen again"))
                 Button {
                     assistant.reset()
                 } label: {
                     Image(systemName: "xmark")
                 }
-                .accessibilityLabel("Raporu kapat")
+                .accessibilityLabel(L("Close report"))
             }
         }
         .font(.subheadline.weight(.semibold))
@@ -188,13 +188,13 @@ struct AssistantView: View {
 
     private var footer: some View {
         VStack(alignment: .leading, spacing: 6) {
-            requestField(placeholder: "Şunu da dene: ör. yanlış şifreyle hata çıkmalı", button: "Ekle")
+            requestField(placeholder: L("Also try: e.g. a wrong password should show an error"), button: L("Add"))
             let saveable = assistant.checks.filter { isSaveable($0) && $0.repairs == nil && !$0.isSaved }
             if saveable.count > 1 {
                 Button {
                     saveable.forEach(saveDraft)
                 } label: {
-                    Label("Geçenlerin hepsini taslaklara kaydet (\(saveable.count))", systemImage: "tray.and.arrow.down")
+                    Label(L("Save all passed checks as drafts (%ld)", saveable.count), systemImage: "tray.and.arrow.down")
                         .font(.caption)
                 }
                 .buttonStyle(.bordered)
@@ -231,10 +231,10 @@ struct AssistantView: View {
 
             if case .needsInput = check.status, !assistant.isWorking {
                 HStack(spacing: 6) {
-                    TextField("Cevabınız (hatırlanır)", text: answerBinding(check.id))
+                    TextField(L("Your answer (remembered)"), text: answerBinding(check.id))
                         .textFieldStyle(.roundedBorder)
                         .font(.footnote)
-                    Button("Gönder") {
+                    Button(L("Send")) {
                         let text = answers[check.id] ?? ""
                         answers[check.id] = nil
                         onRun()
@@ -247,7 +247,7 @@ struct AssistantView: View {
 
             if expanded.contains(check.id) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("Beklenen: \(check.plan.expectation)")
+                    Text("\(L("Expected")): \(check.plan.expectation)")
                         .font(.caption)
                         .foregroundStyle(Color.gray)
                     ForEach(Array(check.attempts.enumerated()), id: \.offset) { _, attempt in
@@ -285,7 +285,7 @@ struct AssistantView: View {
                     scenarios.saveRepair(of: original, steps: check.steps)
                     assistant.markSaved(check.id)
                 } label: {
-                    Label(check.isSaved ? "Senaryo güncellendi" : "Senaryoyu güncelle",
+                    Label(check.isSaved ? L("Scenario updated") : L("Update scenario"),
                           systemImage: check.isSaved ? "checkmark" : "wrench.and.screwdriver")
                 }
                 .disabled(check.isSaved)
@@ -297,11 +297,11 @@ struct AssistantView: View {
                     Button {
                         saveDraft(check)
                     } label: {
-                        Label(check.isSaved ? "Kaydedildi" : "Taslağa kaydet",
+                        Label(check.isSaved ? L("Saved") : L("Save as draft"),
                               systemImage: check.isSaved ? "checkmark" : "tray.and.arrow.down")
                     }
                     .disabled(check.isSaved)
-                    Button("Editöre al") { onEdit(check.steps.joined(separator: "\n")) }
+                    Button(L("Open in editor")) { onEdit(check.steps.joined(separator: "\n")) }
                 }
                 .font(.caption)
                 .buttonStyle(.bordered)
@@ -309,7 +309,7 @@ struct AssistantView: View {
         case .issue:
             issueActions(for: check)
         case .blocked, .skipped:
-            Button("Tekrar dene") { rerun(check) }
+            Button(L("Try again")) { rerun(check) }
                 .font(.caption)
                 .buttonStyle(.bordered)
         case .needsInput, .pending, .running:
@@ -328,11 +328,11 @@ struct AssistantView: View {
                     .frame(height: 96)
                     .clipShape(RoundedRectangle(cornerRadius: 6))
                     .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.gray.opacity(0.4)))
-                    .accessibilityLabel("Sorunun ekran görüntüsü")
+                    .accessibilityLabel(L("Screenshot of the issue"))
             }
             if let issueReporter {
                 if let receipt = check.issueReceipt {
-                    let title = "Kayıt açıldı" + (receipt.key.map { ": \($0)" } ?? "")
+                    let title = receipt.key.map { L("Ticket opened: %@", $0) } ?? L("Ticket opened")
                     if let url = receipt.url {
                         Link(destination: url) { Label(title, systemImage: "arrow.up.right.square") }
                     } else {
@@ -351,7 +351,7 @@ struct AssistantView: View {
                         if assistant.openingIssues.contains(check.id) {
                             ProgressView().controlSize(.mini)
                         } else {
-                            Label("Kayıt aç (\(issueReporter.name))", systemImage: "ticket")
+                            Label(L("Open ticket (%@)", issueReporter.name), systemImage: "ticket")
                         }
                     }
                     .buttonStyle(.borderedProminent)
@@ -367,13 +367,13 @@ struct AssistantView: View {
                     UIPasteboard.general.string = report.text
                     copied = check.id
                 } label: {
-                    Label(copied == check.id ? "Kopyalandı" : "Hata kaydı",
+                    Label(copied == check.id ? L("Copied") : L("Bug report"),
                           systemImage: copied == check.id ? "checkmark" : "ladybug")
                 }
                 ShareLink(item: report.text) {
-                    Label("Paylaş", systemImage: "square.and.arrow.up")
+                    Label(L("Share"), systemImage: "square.and.arrow.up")
                 }
-                Button("Tekrar dene") { rerun(check) }
+                Button(L("Try again")) { rerun(check) }
             }
             .buttonStyle(.bordered)
         }
@@ -415,15 +415,15 @@ struct AssistantView: View {
             ProgressView().controlSize(.small)
             Text(text).lineLimit(2)
             Spacer()
-            Button("Durdur", role: .destructive) { assistant.stop() }
+            Button(L("Stop"), role: .destructive) { assistant.stop() }
         }
         .font(.footnote)
     }
 
     private func statusText(_ check: FlowAssistant.Check) -> String {
         switch check.status {
-        case .pending: "Sırada · \(check.plan.expectation)"
-        case .running: "Koşuyor · \(check.plan.expectation)"
+        case .pending: L("Queued · %@", check.plan.expectation)
+        case .running: L("Running · %@", check.plan.expectation)
         case .passed(let message), .issue(let message), .blocked(let message), .skipped(let message): message
         case .needsInput(let question): question
         }
@@ -461,11 +461,11 @@ struct AssistantView: View {
 
     private func unavailable(_ reason: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label("Asistan kullanılamıyor", systemImage: "sparkles")
+            Label(L("Assistant unavailable"), systemImage: "sparkles")
                 .font(.subheadline.weight(.semibold))
             Text(reason)
                 .font(.footnote)
-            Text("Asistan Apple'ın cihaz içi modelini kullanır: iOS 26+, Apple Intelligence destekleyen bir cihaz ve açık Apple Intelligence gerekir. Kendi modelinizi `assistantModel:` ile verebilirsiniz.")
+            Text(markdown: L("The assistant uses Apple's on-device model: it needs iOS 26+, a device that supports Apple Intelligence and Apple Intelligence turned on. You can pass your own model with `assistantModel:`."))
                 .font(.caption)
                 .foregroundStyle(Color.gray)
         }

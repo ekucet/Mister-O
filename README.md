@@ -55,7 +55,8 @@ wait: 1.5
 - iOS 16 or later
 - Xcode 16 or later (Swift 6 toolchain)
 
-> The panel UI and log messages are currently in Turkish.
+> The panel, the assistant, bug reports and tickets are in English or Turkish and follow the device
+> language. See [Language](#language).
 
 ## Installation
 
@@ -129,21 +130,21 @@ The panel has three tabs:
 
 | Tab | What it's for |
 |---|---|
-| **Asistan** (Assistant) | Let the [AI test assistant](#ai-test-assistant) test the current screen or a check you describe |
-| **Senaryolar** (Scenarios) | Run the [scenario catalog](#scenario-catalog) and the drafts the assistant saved |
-| **Gelişmiş** (Advanced) | Write a flow by hand, read the run log and inspect the elements on screen |
+| **Assistant** | Let the [AI test assistant](#ai-test-assistant) test the current screen or a check you describe |
+| **Scenarios** | Run the [scenario catalog](#scenario-catalog) and the drafts the assistant saved |
+| **Advanced** | Write a flow by hand, read the run log and inspect the elements on screen |
 
-It opens on Asistan when the assistant's model is available, otherwise on Senaryolar if you set up a
-catalog, otherwise on Gelişmiş. Writing a flow by hand on the Gelişmiş tab:
+It opens on Assistant when the assistant's model is available, otherwise on Scenarios if you set up a
+catalog, otherwise on Advanced. Writing a flow by hand on the Advanced tab:
 
 1. **Open:** tap the bubble. You can drag it to either edge.
 2. **Write:** type the flow into the editor. The last flow is saved and comes back on the next launch.
-3. **Find identifiers:** switch from **Log** to **Öğeler** (Elements) to see what's on the current screen.
+3. **Find identifiers:** switch from **Log** to **Elements** to see what's on the current screen.
    Tap a row to add a `tap`, `assertVisible` or `type` line for it.
-4. **Run:** tap **Çalıştır** (Run). The flow is checked first. If a line has a mistake, nothing
+4. **Run:** tap **Run**. The flow is checked first. If a line has a mistake, nothing
    runs and the error is shown with its line number.
 5. **Watch:** the panel collapses into a progress ring so the app stays visible. Tap the ring to
-   see the live log or tap **Durdur** (Stop).
+   see the live log or tap **Stop**.
 6. **Read the result:** the panel opens when the run finishes and scrolls to the first failure.
    The copy button copies a plain-text report.
 
@@ -184,7 +185,7 @@ a scroll view's bounds are ignored.
 
 `tap`, `type` and `assertVisible` retry every 200 ms for up to 5 seconds while the element is
 missing or disabled. If it still isn't there, the step fails, for example with
-`Ekranda bulunamadı: "welcome_label" (5.00 sn beklendi)` ("not found on screen, waited 5 s").
+`Not on screen: "welcome_label" (waited 5.00 s)`.
 By default the run stops at the first failure and marks the remaining steps as skipped.
 
 ## Scenario catalog
@@ -201,15 +202,15 @@ in a JSON file and point the panel at it:
 
 What the tester does:
 
-1. Opens the panel. The **Senaryolar** tab lists every scenario with its step count and tags.
+1. Opens the panel. The **Scenarios** tab lists every scenario with its step count and tags.
 2. Optionally picks a tag, for example `#smoke`.
-3. Taps **Tümünü çalıştır** (Run all), or ▶︎ on a single row.
+3. Taps **Run all**, or ▶︎ on a single row.
 4. The panel collapses and the bubble shows scenario progress, for example `3/20`.
-5. When the run ends, the panel shows a summary such as `17/20 başarılı · 3 başarısız · 2 dk 14 sn`
-   (17/20 passed · 3 failed · 2 min 14 s). Failed rows show their first error. Tap a row to see its
-   steps, or **Editöre al** to load it into the editor. The copy button copies the whole suite report.
-6. If a scenario broke because the screen changed (a renamed button, a new field), **Asistanla onar**
-   (Repair with assistant) on the failed row hands it to the assistant. See
+5. When the run ends, the panel shows a summary such as `17/20 passed · 3 failed · 2 min 14 s`.
+   Failed rows show their first error. Tap a row to see its steps, or **Open in editor** to load it
+   into the editor. The copy button copies the whole suite report.
+6. If a scenario broke because the screen changed (a renamed button, a new field), **Repair with
+   assistant** on the failed row hands it to the assistant. See
    [Repairing a failing scenario](#repairing-a-failing-scenario).
 
 A failing scenario stops at its first failed step, and the suite moves on to the next scenario.
@@ -265,7 +266,7 @@ marked in red, can't be run, and is left out of **Run all**.
 | `.custom(name:cacheKey:) { … }` | Anything else, such as Firebase Remote Config or your own API |
 
 The last catalog that loaded successfully from `.remote` is cached on the device. If the source
-can't be reached, testers see the cached list marked **Çevrimdışı** (Offline). The refresh button
+can't be reached, testers see the cached list marked **Offline**. The refresh button
 reloads the catalog.
 
 For a private repository, pass a token with `headers: ["Authorization": "Bearer …"]`. Anything in a
@@ -293,13 +294,13 @@ order the catalog so that each scenario continues from where the previous one en
 > **Note:** The assistant loop, the report and the demo flow are tested. Apple's on-device model has
 > not yet been run end to end on a device (see [Status](#status)).
 
-Open the panel on any screen and switch to **Asistan**. There are two ways to start:
+Open the panel on any screen and switch to **Assistant**. There are two ways to start:
 
-- **Bu ekranı test et** (Test this screen): the assistant looks at the elements on the screen and plans
+- **Test this screen**: the assistant looks at the elements on the screen and plans
   up to four checks itself, for example *"An empty form shouldn't sign in"*, *"Invalid details
   shouldn't sign in"* and *"Valid details should sign in"*. You can give it a focus first, for example
   *"only the password field"*.
-- **Describe a check** in the *ya da tarif edin…* (or describe…) field, in your own words:
+- **Describe a check** in the *or describe one…* field, in your own words:
   *"Fill in the fields and tap Continue; it should go to the next screen, otherwise fail."*
   The part that says what should happen (*-malı/-meli* in Turkish, *should/must* in English) becomes
   the expected result. The assistant fills the fields with data that fits each one, taps, and checks
@@ -312,27 +313,27 @@ Then:
    as a last resort.
 2. You get a short report, for example `3 checks · 2 passed · 1 issue`.
 3. You continue from the report:
-   - **Issue:** **Kayıt aç (Jira)** (Open ticket) opens a ticket in your tracker if you
-     [connected one](#opening-tickets-jira-linear-github-issues). **Hata kaydı** (Bug report) copies
-     the steps, expected and actual result and the device; **Paylaş** (Share) sends them anywhere.
+   - **Issue:** **Open ticket (Jira)** opens a ticket in your tracker if you
+     [connected one](#opening-tickets-jira-linear-github-issues). **Bug report** copies the steps,
+     expected and actual result and the device; **Share** sends them anywhere.
    - **Needs info:** the assistant asks for data it can't make up, for example *"Can you give me a
      valid e-mail and password?"* Answer, and the check runs again. Your answer is remembered.
-   - **Passed:** **Taslağa kaydet** (Save as draft) turns the check into a draft scenario. Drafts appear
-     in the Senaryolar tab right away and can be shared with your QA lead as catalog JSON.
-   - **Şunu da dene** (Try this too): describe another check and the assistant runs it.
+   - **Passed:** **Save as draft** turns the check into a draft scenario. Drafts appear
+     in the Scenarios tab right away and can be shared with your QA lead as catalog JSON.
+   - **Also try…**: describe another check and the assistant runs it.
 
 On the demo's login screen the assistant finds a real bug in the demo app: the e-mail check only looks
 for "@", so "a@" signs in. The demo passes its test account as [`testData`](#test-data-and-what-the-assistant-remembers),
 so the assistant never has to ask:
 
 ```
-Mister-O asistan raporu · 3 kontrol · 2 geçti · 1 sorun
-✓ Boş formla “Giriş Yap” çalışmamalı
-    Boş formda Giriş Yap pasif kalıyor.
-✗ Geçersiz bilgilerle “Giriş Yap” çalışmamalı
-    Geçersiz e-postayla (a@) giriş yapılabildi; ana sayfa açıldı.
-✓ Geçerli bilgilerle “Giriş Yap” çalışmalı
-    Giriş yapıldı, ana sayfa açıldı.
+Mister-O assistant report · 3 checks · 2 passed · 1 issue
+✓ “Giriş Yap” shouldn't work with an empty form
+    Giriş Yap stays disabled on an empty form.
+✗ “Giriş Yap” shouldn't work with invalid details
+    Signed in with an invalid e-mail (a@); the home screen opened.
+✓ “Giriş Yap” should work with valid details
+    Signed in; the home screen opened.
 ```
 
 ### Test data and what the assistant remembers
@@ -364,20 +365,20 @@ build, so use test accounts only.
 ### Repairing a failing scenario
 
 When a scenario fails, for example because a button was renamed or a field was added, its row in the
-Senaryolar tab shows **Asistanla onar** (Repair with assistant). The assistant gets the scenario's
+Scenarios tab shows **Repair with assistant**. The assistant gets the scenario's
 `goal` (or its name and description) with the old steps as a hint, resets the app if the scenario
 uses `resetApp`, and tries to reach the goal on the current screen.
 
-If the check passes, **Senaryoyu güncelle** (Update scenario) saves the new steps. A draft is updated
-in place. A catalog scenario gets a draft copy named "… (onarıldı)" and tagged `onarıldı` (repaired),
-because the catalog itself lives in your repository: share it with **Taslakları paylaş** (Share drafts)
+If the check passes, **Update scenario** saves the new steps. A draft is updated
+in place. A catalog scenario gets a draft copy named "… (repaired)" and tagged `repaired`,
+because the catalog itself lives in your repository: share it with **Share drafts**
 and merge it into the catalog. If the check reports an issue instead, the scenario probably caught a real
 bug, and you can open a ticket from the report.
 
 ### Opening tickets (Jira, Linear, GitHub Issues…)
 
-Pass an `issueReporter`, and every issue in the report gets a **Kayıt aç** (Open ticket) button. The
-key and link of the opened ticket appear in the report, for example *Kayıt açıldı: QA-42*. Each issue
+Pass an `issueReporter`, and every issue in the report gets an **Open ticket** button. The
+key and link of the opened ticket appear in the report, for example *Ticket opened: QA-42*. Each issue
 is opened once; if it fails, the error is shown and the tester can tap again.
 
 When a check ends with an issue, the assistant takes a screenshot of the app's key window. Mister-O's
@@ -389,7 +390,7 @@ The built-in `WebhookIssueReporter` posts the bug report as JSON to a URL you ch
 ```swift
 .misterOTestPanel(
     issueReporter: WebhookIssueReporter(
-        name: "Jira",                                        // button title: "Kayıt aç (Jira)"
+        name: "Jira",                                        // button title: "Open ticket (Jira)"
         url: URL(string: "https://hooks.example.com/mistero")!,
         headers: ["Authorization": "Bearer …"]               // optional
     )
@@ -398,11 +399,11 @@ The built-in `WebhookIssueReporter` posts the bug report as JSON to a URL you ch
 
 ```json
 {
-  "title": "Geçersiz bilgilerle “Giriş Yap” çalışmamalı: beklenen davranış görülmedi",
+  "title": "“Giriş Yap” shouldn't work with invalid details: expected behavior not seen",
   "steps": ["type: email_field -> a@", "type: password_field -> 123456", "tap: login_button"],
-  "expected": "Hata görünmeli ya da “Giriş Yap” pasif kalmalı; ekran değişmemeli.",
-  "actual": "Geçersiz e-postayla (a@) giriş yapılabildi; ana sayfa açıldı.",
-  "environment": "iPhone (Simülatör) · iOS 27.0 · app.mistero.demo 1.0 (1)",
+  "expected": "An error should appear or “Giriş Yap” should stay disabled; the screen shouldn't change.",
+  "actual": "Signed in with an invalid e-mail (a@); the home screen opened.",
+  "environment": "iPhone (Simulator) · iOS 27.0 · app.mistero.demo 1.0 (1)",
   "description": "The same report as plain text, ready for the ticket body",
   "attachments": [
     { "filename": "screenshot.png", "mimeType": "image/png", "data": "iVBORw0KGgoAAAANSUhEUg…" }
@@ -411,7 +412,7 @@ The built-in `WebhookIssueReporter` posts the bug report as JSON to a URL you ch
 ```
 
 `data` is the file in base64, and `attachments` is empty when there is no screenshot. The other fields
-are the same as before. The screenshot makes the body much larger; if your endpoint can't take that,
+are the same as before. The text is in the panel's [language](#language). The screenshot makes the body much larger; if your endpoint can't take that,
 pass `includesAttachments: false`.
 
 If the response is JSON with `key` and `url` (or Jira's `self`), the report links to the ticket.
@@ -419,7 +420,7 @@ Where to point the webhook:
 
 - **Jira:** an Automation rule with the *Incoming webhook* trigger and a *Create issue* action that
   uses `{{webhookData.title}}` and `{{webhookData.description}}`. Automation answers before the rule
-  runs, so the report says *Kayıt açıldı* without a key. Automation can't turn the base64 screenshot
+  runs, so the report says *Ticket opened* without a key. Automation can't turn the base64 screenshot
   into an attachment, so on this route the ticket arrives without it.
 - **Zapier, Make or n8n:** a webhook trigger that creates the issue in Linear, GitHub Issues, Azure
   DevOps or anywhere else.
@@ -478,7 +479,7 @@ struct LinearReporter: IssueReporter {
 }
 ```
 
-Without an `issueReporter`, testers still have **Hata kaydı** and **Paylaş**.
+Without an `issueReporter`, testers still have **Bug report** and **Share**.
 
 ### How it stays reliable with a small model
 
@@ -547,7 +548,7 @@ With a remote model, the screen's element names and the tester's answers leave t
 - On the iOS 27 simulator, the demo's rule-based model (`MISTERO_ASSISTANT=demo`) ran the whole loop:
   three checks with no questions thanks to `testData`, the "a@" bug found and turned into a ticket
   through a local webhook, a described "fill the fields and continue" check, drafts saved and run, and a
-  failing catalog scenario repaired into an "(onarıldı)" draft.
+  failing catalog scenario repaired into a "(repaired)" draft.
 - Parsing Apple's answers and building its schemas is unit-tested without the model. Two integration
   tests call the real model and are skipped when it isn't available.
 - The iOS Simulator reports the model as available, but generation fails with "Simulator is not
@@ -582,7 +583,8 @@ language changes.
     resetApp: { router.path = [] },                  // runs before each scenario
     assistantModel: nil,                             // nil = Apple on-device model on iOS 26+
     testData: ["Test e-mail": "qa@acme.com"],        // data the assistant can't make up
-    issueReporter: WebhookIssueReporter(url: hook),  // "Kayıt aç" (Open ticket) on issues
+    issueReporter: WebhookIssueReporter(url: hook),  // "Open ticket" on issues
+    language: nil,                                   // nil = device language; or .english, .turkish
     configuration: .init(
         elementTimeout: .seconds(8),                 // wait per element (default 5 s)
         pollInterval: .milliseconds(200),            // how often to look again
@@ -593,8 +595,23 @@ language changes.
 )
 ```
 
-`MisterO.install(in:initialScript:scenarios:resetApp:assistantModel:testData:issueReporter:configuration:enablesSwiftUIAccessibility:)`
+`MisterO.install(in:initialScript:scenarios:resetApp:assistantModel:testData:issueReporter:language:configuration:enablesSwiftUIAccessibility:)`
 takes the same parameters. `MisterO.uninstall()` removes the panel and restores the accessibility setting.
+
+### Language
+
+The panel, the assistant's report and messages, bug reports, tickets and flow errors are in English or
+Turkish. Mister-O follows the device language and falls back to English. Pass `language:` to pin one,
+for example when a Turkish QA team tests an English build:
+
+```swift
+.misterOTestPanel(language: .turkish)
+```
+
+The assistant's model is told to write its checks and messages in the same language, and the drafts it
+saves are tagged in it (`draft`, `assistant`, `repaired` or `taslak`, `asistan`, `onarıldı`). To add a
+language, add `Sources/MisterOCore/Resources/<code>.lproj/Localizable.strings` with the English text as
+keys, and a case to `MisterOLanguage`.
 
 ## Running flows from code
 
@@ -714,13 +731,16 @@ xcodebuild test -scheme MisterO -destination 'platform=iOS Simulator,name=iPhone
 A demo app with a SwiftUI login screen and a UIKit screen lives in `Examples/MisterODemo`. It ships
 a four-scenario catalog (`Sources/mistero-scenarios.json`, one of which fails on purpose) and a
 `resetApp` handler. Set the `MISTERO_SCENARIOS_URL` environment variable to load the catalog from a URL
-instead. Set `MISTERO_ASSISTANT=demo` to try the Asistan tab with a rule-based stand-in model where
-the Apple model isn't available, and `MISTERO_ISSUE_WEBHOOK` to a URL to try **Kayıt aç** against your
+instead. Set `MISTERO_ASSISTANT=demo` to try the Assistant tab with a rule-based stand-in model where
+the Apple model isn't available, and `MISTERO_ISSUE_WEBHOOK` to a URL to try **Open ticket** against your
 own webhook:
 
 ```bash
 open Examples/MisterODemo/MisterODemo.xcodeproj
 ```
+
+The panel follows the simulator's language. To see the other one, add `-AppleLanguages (tr)` or
+`-AppleLanguages (en)` to the scheme's launch arguments.
 
 The demo project is generated from `project.yml` with [XcodeGen](https://github.com/yonaskolb/XcodeGen).
 After editing that file, run `xcodegen generate` again.

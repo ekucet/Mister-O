@@ -37,20 +37,24 @@ public enum MisterO {
     ///     `["Test hesabı e-postası": "qa@firma.com", "Test hesabı şifresi": "…"]`. Asistan bunları sormaz.
     ///   - issueReporter: Asistanın bulduğu sorunları takip aracınızda kayda çevirir (örn. `WebhookIssueReporter`).
     ///     Sorunun ekran görüntüsü kayda eklenir.
+    ///   - language: Panelin, raporların ve asistanın dili. Verilmezse cihazın dili (desteklenmiyorsa İngilizce).
     ///   - enablesSwiftUIAccessibility: SwiftUI öğelerini bulabilmek için uygulama erişilebilirliğini
     ///     açar (private API, ayrıntı `AccessibilityBootstrap`'ta). Yalnızca UIKit ekranlarınız varsa `false` verin.
     public static func install(
         in scene: UIWindowScene,
-        initialScript: String = SampleFlow.starter,
+        initialScript: String? = nil,
         scenarios feed: ScenarioFeed? = nil,
         resetApp: (@MainActor () async -> Void)? = nil,
         assistantModel: (any FlowAssistantModel)? = nil,
         testData: [String: String] = [:],
         issueReporter: (any IssueReporter)? = nil,
+        language: MisterOLanguage? = nil,
         configuration: InAppTestRunner.Configuration = .default,
         enablesSwiftUIAccessibility: Bool = true
     ) {
         guard overlay == nil else { return }
+        // Önce dil: aşağıda oluşan her metin (başlangıç akışı, asistanın durumu) bu dilde olur.
+        MisterOLanguage.current = language ?? .device
         if enablesSwiftUIAccessibility {
             AccessibilityBootstrap.install()
         }
@@ -71,7 +75,7 @@ public enum MisterO {
 
         let host = UIHostingController(rootView: TestPanelView(
             runner: runner, scenarios: store, panel: panel, assistant: assistant, issueReporter: issueReporter,
-            resolver: driver.resolver, initialScript: initialScript
+            resolver: driver.resolver, initialScript: initialScript ?? SampleFlow.starter
         ))
         host.view.backgroundColor = .clear
         window.rootViewController = host
@@ -125,39 +129,42 @@ public enum MisterO {
             return AppleFlowAssistantModel()
         }
         #endif
-        return UnavailableAssistantModel(reason: "Asistan için iOS 26 ve Apple Intelligence gerekir.")
+        return UnavailableAssistantModel(reason: L("The assistant needs iOS 26 and Apple Intelligence."))
     }
 }
 
 public enum SampleFlow {
-    /// Panel ilk açıldığında editörde görünen kısa sözdizimi rehberi.
-    public static let starter = """
-    # Mister-O · her satır bir adım
-    # tap: "accessibility_id veya buton metni"
-    # type: "alan_id" -> "yazılacak metin"
-    # wait: 1.5
-    # assertVisible: "accessibility_id"
+    /// Panel ilk açıldığında editörde görünen kısa sözdizimi rehberi (panelin dilinde).
+    public static var starter: String {
+        """
+        \(L("# Mister-O · one step per line"))
+        \(L("# tap: \"accessibility_id or button text\""))
+        \(L("# type: \"field_id\" -> \"text to type\""))
+        # wait: 1.5
+        # assertVisible: "accessibility_id"
 
-    tap: "login_button"
-    """
+        tap: "login_button"
+        """
+    }
 }
 
 public extension View {
     /// Mister-O test panelini bu görünümün sahnesine kurar (sahne başına bir kez).
     func misterOTestPanel(
-        initialScript: String = SampleFlow.starter,
+        initialScript: String? = nil,
         scenarios: ScenarioFeed? = nil,
         resetApp: (@MainActor () async -> Void)? = nil,
         assistantModel: (any FlowAssistantModel)? = nil,
         testData: [String: String] = [:],
         issueReporter: (any IssueReporter)? = nil,
+        language: MisterOLanguage? = nil,
         configuration: InAppTestRunner.Configuration = .default,
         enablesSwiftUIAccessibility: Bool = true
     ) -> some View {
         background(SceneHook { scene in
             MisterO.install(in: scene, initialScript: initialScript, scenarios: scenarios, resetApp: resetApp,
                             assistantModel: assistantModel, testData: testData, issueReporter: issueReporter,
-                            configuration: configuration, enablesSwiftUIAccessibility: enablesSwiftUIAccessibility)
+                            language: language, configuration: configuration, enablesSwiftUIAccessibility: enablesSwiftUIAccessibility)
         })
     }
 }

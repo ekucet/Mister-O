@@ -129,7 +129,7 @@ struct IssueReporterTests {
         let expected = try #require(content[2]["content"] as? [[String: Any]])
         #expect(Set(expected[0].keys) == ["type", "text", "marks"])   // boş alanlar yazılmaz
         #expect(expected[0]["marks"] as? [[String: String]] == [["type": "strong"]])
-        #expect(expected.map { $0["text"] as? String } == ["Beklenen: ", "Hata görünmeli"])
+        #expect(expected.map { $0["text"] as? String } == ["Expected: ", "Hata görünmeli"])
         #expect(expected[1]["marks"] == nil)
     }
 
@@ -140,8 +140,8 @@ struct IssueReporterTests {
 
         let bare = BugReport(title: "t", steps: [], expected: "", actual: "g", environment: "o")
         let content = JiraIssueReporter.description(for: bare).content ?? []
-        #expect(content[1] == .paragraph([.text("(adım yok)")]))
-        #expect(content[2] == .paragraph([.text("Beklenen: ", strong: true), .text("-")]))
+        #expect(content[1] == .paragraph([.text("(no steps)")]))
+        #expect(content[2] == .paragraph([.text("Expected: ", strong: true), .text("-")]))
     }
 
     @Test func uploadsAttachmentsAsMultipart() {
@@ -180,7 +180,7 @@ struct IssueReporterTests {
         #expect(JiraIssueReporter.errorMessage(from: Data(#"{"errorMessages": [], "errors": {}}"#.utf8)) == nil)
         #expect(JiraIssueReporter.errorMessage(from: Data("<html>".utf8)) == nil)
         #expect(IssueReporterError.rejected(status: 400, message: "issuetype: Geçersiz").localizedDescription
-                == "Kayıt açılamadı: sunucu 400 döndü (issuetype: Geçersiz).")
+                == "Couldn't open the ticket: the server returned 400 (issuetype: Geçersiz).")
     }
 
     @Test func buildsTheBasicAuthorizationValue() {
@@ -204,7 +204,7 @@ struct IssueReporterTests {
 
         // Kayıt açıldı sayılır; testçi tekrar basıp ikinci kayıt açmasın.
         #expect(receipt.key == "QA-8")
-        #expect(receipt.warning == "Ekler yüklenemedi: sunucu 413 döndü (Dosya çok büyük).")
+        #expect(receipt.warning == "Attachments weren't uploaded: the server returned 413 (Dosya çok büyük).")
     }
 
     @Test func skipsTheUploadWithoutAttachments() async throws {

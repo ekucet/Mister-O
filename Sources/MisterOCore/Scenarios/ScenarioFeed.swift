@@ -8,13 +8,20 @@ import Foundation
 ///     .custom(name: "Remote Config") { try await myBackend.scenarios() }
 public struct ScenarioFeed: Sendable {
     /// Panelde kaynağı tanıtan kısa ad.
-    public let name: String
+    public var name: String { label() }
+    /// Kurulumdan önce oluşturulan `.inline`'ın adı da panelin dilinde görünsün diye geç okunur.
+    private let label: @Sendable () -> String
     /// Doluysa son başarılı yükleme diske yazılır ve kaynağa ulaşılamadığında kullanılır.
     public let cacheKey: String?
     let load: @Sendable () async throws -> [Scenario]
 
     public init(name: String, cacheKey: String? = nil, load: @escaping @Sendable () async throws -> [Scenario]) {
-        self.name = name
+        self.init(label: { name }, cacheKey: cacheKey, load: load)
+    }
+
+    private init(label: @escaping @Sendable () -> String, cacheKey: String?,
+                 load: @escaping @Sendable () async throws -> [Scenario]) {
+        self.label = label
         self.cacheKey = cacheKey
         self.load = load
     }
@@ -46,7 +53,7 @@ public struct ScenarioFeed: Sendable {
 
     /// Koddaki sabit liste.
     public static func inline(_ scenarios: [Scenario]) -> ScenarioFeed {
-        ScenarioFeed(name: "Kod içi") { ScenarioCatalog.uniquingIDs(scenarios) }
+        ScenarioFeed(label: { L("In code") }, cacheKey: nil) { ScenarioCatalog.uniquingIDs(scenarios) }
     }
 
     /// Kendi kaynağınız (Firebase Remote Config, kendi API'niz…). `cacheKey` verirseniz önbelleğe alınır.
@@ -67,8 +74,8 @@ public enum ScenarioFeedError: Error, Equatable, Sendable {
 extension ScenarioFeedError: LocalizedError {
     public var errorDescription: String? {
         switch self {
-        case .httpStatus(let code): "Sunucu \(code) döndü."
-        case .missingResource(let name): "Uygulama paketinde \(name) bulunamadı."
+        case .httpStatus(let code): L("The server returned %ld.", code)
+        case .missingResource(let name): L("%@ isn't in the app bundle.", name)
         }
     }
 }

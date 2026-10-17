@@ -103,9 +103,9 @@ struct InAppTestRunnerTests {
             Issue.record("2. adım başarısız olmalıydı")
             return
         }
-        #expect(message.contains("Ekranda bulunamadı: \"missing\""))
+        #expect(message.contains("Not on screen: \"missing\""))
         #expect(driver.actions == ["tap a"])
-        #expect(runner.reportText.contains("✗ [satır 2] assertVisible: missing"))
+        #expect(runner.reportText.contains("✗ [line 2] assertVisible: missing"))
     }
 
     @Test func nonRetryableErrorFailsImmediately() async {
@@ -150,7 +150,7 @@ struct InAppTestRunnerTests {
 
         let quick = InAppTestRunner(driver: driver, configuration: fast)
         #expect(await quick.run("assertDisabled: save") == .failed)
-        #expect(quick.reportText.contains("Öğe aktif, pasif olması bekleniyordu: \"save\""))
+        #expect(quick.reportText.contains("Element is enabled, it should be disabled: \"save\""))
         #expect(await quick.run("assertEnabled: missing") == .failed)
         #expect(await quick.run("assertNotVisible: save") == .failed)
     }

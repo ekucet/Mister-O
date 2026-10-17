@@ -12,12 +12,12 @@ struct ElementListView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                Text("\(elements.count) öğe · dokun ve komut ekle")
+                Text(L(elements.count, one: "%ld element · tap to add a command", other: "%ld elements · tap to add a command"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button(action: onRefresh) {
-                    Label("Yenile", systemImage: "arrow.clockwise")
+                    Label(L("Refresh"), systemImage: "arrow.clockwise")
                         .font(.caption)
                 }
             }

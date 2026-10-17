@@ -34,7 +34,7 @@ public final class ScenarioStore: ObservableObject {
         /// Listede gösterilecek ilk hata.
         public var failureMessage: String? {
             for result in steps {
-                if case .failed(let message) = result.status { return "Satır \(result.step.line): \(message)" }
+                if case .failed(let message) = result.status { return L("Line %ld: %@", result.step.line, message) }
             }
             return parseIssues.first?.description
         }
@@ -157,15 +157,15 @@ public final class ScenarioStore: ObservableObject {
     }
 
     /// Asistanın onardığı adımları kaydeder. Taslak yerinde güncellenir; katalogdaki senaryo uzak dosyada
-    /// değiştirilemediği için "(onarıldı)" adlı yeni bir taslak olur ve QA ekibine paylaşılır.
+    /// değiştirilemediği için "(repaired)" / "(onarıldı)" adlı yeni bir taslak olur ve QA ekibine paylaşılır.
     @discardableResult
     public func saveRepair(of original: Scenario, steps: [String]) -> Scenario {
         let script = steps.joined(separator: "\n")
         let repaired = isDraft(original)
             ? Scenario(id: original.id, name: original.name, summary: original.summary, tags: original.tags,
                        resetsApp: original.resetsApp, goal: original.goal, script: script)
-            : Scenario(id: "\(original.id)-onarildi", name: "\(original.name) (onarıldı)", summary: original.summary,
-                       tags: original.tags + ["taslak", "onarıldı"], resetsApp: original.resetsApp,
+            : Scenario(id: "\(original.id)-onarildi", name: L("%@ (repaired)", original.name), summary: original.summary,
+                       tags: original.tags + [L("draft"), L("repaired")], resetsApp: original.resetsApp,
                        goal: original.goal, script: script)
         runs[repaired.id] = nil
         saveDraft(repaired)
@@ -269,14 +269,14 @@ public final class ScenarioStore: ObservableObject {
     public var suiteReportText: String {
         guard let suite else { return "" }
         let passed = suite.scenarioIDs.filter { runs[$0]?.state == .passed }.count
-        var lines = ["Mister-O · Suite · \(passed)/\(suite.scenarioIDs.count) başarılı"
+        var lines = ["Mister-O · Suite · " + L("%ld/%ld passed", passed, suite.scenarioIDs.count)
                      + (suite.elapsed.map { " · \($0.compactText)" } ?? "")
-                     + (suite.wasCancelled ? " · durduruldu" : "")]
+                     + (suite.wasCancelled ? " · " + L("stopped") : "")]
 
         for scenario in suite.scenarios {
             let name = scenario.name
             guard let run = runs[scenario.id] else {
-                lines.append("– \(name) (çalışmadı)")
+                lines.append("– " + L("%@ (didn't run)", name))
                 continue
             }
             let symbol = run.state == .passed ? "✓" : run.state == .cancelled ? "–" : "✗"

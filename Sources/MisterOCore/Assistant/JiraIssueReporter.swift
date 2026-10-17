@@ -44,14 +44,14 @@ public struct JiraIssueReporter: IssueReporter {
         let receipt = self.receipt(from: try await send(try issueRequest(for: report)))
         guard !report.attachments.isEmpty else { return receipt }
         guard let key = receipt.key else {
-            return IssueReceipt(key: nil, url: receipt.url, warning: "Ekler yüklenemedi: Jira kayıt anahtarı dönmedi.")
+            return IssueReceipt(key: nil, url: receipt.url, warning: L("Attachments weren't uploaded: Jira returned no issue key."))
         }
         do {
             _ = try await send(attachmentRequest(for: report.attachments, issueKey: key))
             return receipt
         } catch {
             let reason = (error as? IssueReporterError)?.reason ?? error.localizedDescription
-            return IssueReceipt(key: key, url: receipt.url, warning: "Ekler yüklenemedi: \(reason)")
+            return IssueReceipt(key: key, url: receipt.url, warning: L("Attachments weren't uploaded: %@", reason))
         }
     }
 
@@ -135,19 +135,19 @@ public struct JiraIssueReporter: IssueReporter {
         String(title.components(separatedBy: .newlines).joined(separator: " ").prefix(255))
     }
 
-    /// Hata kaydı `BugReport.text` ile aynı düzende, Atlassian Document Format olarak.
+    /// Hata kaydı `BugReport.text` ile aynı düzende ve panelin dilinde, Atlassian Document Format olarak.
     static func description(for report: BugReport) -> ADFNode {
         let steps: ADFNode = report.steps.isEmpty
-            ? .paragraph([.text("(adım yok)")])
+            ? .paragraph([.text(L("(no steps)"))])
             : ADFNode(type: "orderedList", content: report.steps.map {
                 ADFNode(type: "listItem", content: [.paragraph([.text($0)])])
             })
         return ADFNode(type: "doc", version: 1, content: [
-            ADFNode(type: "heading", attrs: ["level": 3], content: [.text("Adımlar")]),
+            ADFNode(type: "heading", attrs: ["level": 3], content: [.text(L("Steps"))]),
             steps,
-            .paragraph([.text("Beklenen: ", strong: true), .text(report.expected)]),
-            .paragraph([.text("Gerçekleşen: ", strong: true), .text(report.actual)]),
-            .paragraph([.text("Ortam: ", strong: true), .text(report.environment)]),
+            .paragraph([.text(L("Expected") + ": ", strong: true), .text(report.expected)]),
+            .paragraph([.text(L("Actual") + ": ", strong: true), .text(report.actual)]),
+            .paragraph([.text(L("Environment") + ": ", strong: true), .text(report.environment)]),
         ])
     }
 }
