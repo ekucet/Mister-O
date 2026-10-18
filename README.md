@@ -21,11 +21,11 @@ wait: 1.5
 ```
 
 <p align="center">
-  <img src="docs/images/assistant.png" width="160" alt="Assistant report with a bug found and a ticket opened">
-  <img src="docs/images/scenarios.png" width="160" alt="Scenario catalog after a suite run">
-  <img src="docs/images/elements.png" width="160" alt="Elements tab listing on-screen identifiers">
-  <img src="docs/images/passed.png" width="160" alt="A passing run">
-  <img src="docs/images/failed.png" width="160" alt="A failing step with its error message">
+  <img src="docs/images/en/assistant.png" width="160" alt="Assistant report with a bug found and a ticket opened">
+  <img src="docs/images/en/scenarios.png" width="160" alt="Scenario catalog after a suite run">
+  <img src="docs/images/en/elements.png" width="160" alt="Elements tab listing on-screen identifiers">
+  <img src="docs/images/en/passed.png" width="160" alt="A passing run">
+  <img src="docs/images/en/failed.png" width="160" alt="A failing step with its error message">
 </p>
 
 ## Features
