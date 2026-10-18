@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Aynı branch'e yeni commit gelince eski koşu iptal edilir.
+concurrency:
+  group: ci-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    # Açıkça `bash` yazınca GitHub `-eo pipefail` ile koşar; `| tee` hatayı yutmaz.
+    shell: bash
+
+env:
+  # macos-26 imajının GA Xcode'u. Xcode 27 şimdilik yalnızca önizleme imajında (xcode-27).
+  DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer
+
+jobs:
+  swift-test:
+    name: swift test (macOS)
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - run: swift --version
+      - name: swift test
+        run: |
+          swift test 2>&1 | tee "$RUNNER_TEMP/swift-test.log"
+          # Kaynak klasörü bulunamazsa everyKeyIsTranslated sessizce atlanır; macOS'ta koşmak zorunda.
+          if ! grep -q "everyKeyIsTranslated() passed" "$RUNNER_TEMP/swift-test.log"; then
+            echo "::error::LocalizationTests.everyKeyIsTranslated koşmadı (atlandı ya da bulunamadı)."
+            exit 1
+          fi
+
+  ios:
+    name: iOS simulator (xcodebuild test + demo)
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - run: xcodebuild -version
+      - name: Pick an iPhone simulator
+        # İmaj güncellendikçe cihaz adları değişiyor; en yeni iOS runtime'ındaki ilk iPhone seçilir.
+        run: |
+          read -r udid os name < <(xcrun simctl list devices available -j | jq -r '
+            .devices | to_entries
+            | map(select(.key | test("SimRuntime\\.iOS-[0-9]+-[0-9]+$"))
+                  | select(any(.value[]; .name | startswith("iPhone"))))
+            | sort_by(.key | capture("iOS-(?<major>[0-9]+)-(?<minor>[0-9]+)$")
+                      | [(.major | tonumber), (.minor | tonumber)])
+            | last
+            | (.key | capture("iOS-(?<v>.*)$").v | gsub("-"; ".")) as $os
+            | .value | map(select(.name | startswith("iPhone"))) | first
+            | "\(.udid) \($os) \(.name)"') || true
+          if [ -z "$udid" ] || [ "$udid" = "null" ]; then
+            echo "::error::Kullanılabilir iPhone simülatörü yok."
+            xcrun simctl list devices available
+            exit 1
+          fi
+          echo "Simulator: $name (iOS $os) $udid"
+          echo "DESTINATION=platform=iOS Simulator,id=$udid" >> "$GITHUB_ENV"
+      - name: xcodebuild test
+        run: xcodebuild test -scheme MisterO -destination "$DESTINATION"
+      - name: Build demo app
+        run: |
+          xcodebuild build \
+            -project Examples/MisterODemo/MisterODemo.xcodeproj \
+            -scheme MisterODemo \
+            -destination "$DESTINATION"
