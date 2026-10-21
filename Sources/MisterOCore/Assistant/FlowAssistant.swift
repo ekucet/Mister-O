@@ -469,12 +469,14 @@ public final class FlowAssistant: ObservableObject {
             case .blocked:
                 checks[index].status = .blocked(decision.message?.nonEmpty ?? L("The check couldn't continue."))
                 return
-            case .tap, .type, .assertVisible, .assertNotVisible, .assertEnabled, .assertDisabled:
+            case .tap, .type, .assertVisible, .assertNotVisible, .assertEnabled, .assertDisabled, .scroll, .back:
                 break
             }
 
             guard let line = Self.line(for: decision, allowedTargets: context.targets) else {
-                lastIssue = "Your last answer had no valid target from the screen list."
+                lastIssue = decision.action == .scroll
+                    ? "Your last scroll had no direction; put down or up in text."
+                    : "Your last answer had no valid target from the screen list."
                 failures += 1
                 if failures >= maxFailuresInARow {
                     checks[index].status = .blocked(L("The assistant found no valid step on this screen."))
@@ -484,8 +486,19 @@ public final class FlowAssistant: ObservableObject {
             }
 
             checks[index].currentLine = line
-            let failure = await execute(line)
+            var failure = await execute(line)
             if Task.isCancelled { return }
+            var settled = false
+            if failure == nil, decision.action == .scroll {
+                // Sona gelmiş bir liste kaydırılınca sürücü hata vermez; ekran aynı kaldıysa model aynı yöne
+                // kaydırmayı sürdürmesin diye adım düşmüş sayılır.
+                try? await Task.sleep(for: settleTime)
+                settled = true
+                let after = screen().prefix(PlanContext.maxScreenElements).map(\.query)
+                if after == context.screen.map(\.query) {
+                    failure = L("Nothing new appeared; the end of the scrollable area was reached.")
+                }
+            }
             checks[index].currentLine = nil
             checks[index].attempts.append(.init(line: line, passed: failure == nil, note: failure))
 
@@ -501,7 +514,9 @@ public final class FlowAssistant: ObservableObject {
                 lastIssue = nil
                 failures = 0
             }
-            try? await Task.sleep(for: settleTime)
+            if !settled {
+                try? await Task.sleep(for: settleTime)
+            }
         }
         checks[index].status = .blocked(L("Reached the step limit (%ld).", maxStepsPerCheck))
     }
@@ -516,10 +531,22 @@ public final class FlowAssistant: ObservableObject {
         return runner.parseIssues.first?.message ?? state.title
     }
 
-    /// Model kararını akış satırına çevirir; hedef ekranda yoksa `nil`.
-    static func line(for decision: AssistantDecision, allowedTargets: [String]) -> String? {
-        guard let target = decision.target?.trimmingCharacters(in: .whitespaces), target != "-",
-              allowedTargets.contains(target) else { return nil }
+    /// Model kararını akış satırına çevirir; hedef ekranda yoksa (ya da kaydırmanın yönü anlaşılmazsa) `nil`.
+    /// `back` hedef istemez. `scroll` hedefsiz ekranın ana listesini kaydırır; listedeki bir öğe verilirse o
+    /// öğenin içinde bulunduğu liste kayar.
+    nonisolated static func line(for decision: AssistantDecision, allowedTargets: [String]) -> String? {
+        let target = decision.target?.trimmingCharacters(in: .whitespaces) ?? "-"
+        switch decision.action {
+        case .back:
+            return "back"
+        case .scroll:
+            guard let direction = scrollDirection(decision.text) else { return nil }
+            guard target != "-", allowedTargets.contains(target) else { return "scroll: \(direction.rawValue)" }
+            return "scroll: \(FlowParser.literal(target)) -> \(direction.rawValue)"
+        default:
+            break
+        }
+        guard target != "-", allowedTargets.contains(target) else { return nil }
         let selector = FlowParser.literal(target)
         return switch decision.action {
         case .tap: "tap: \(selector)"
@@ -528,8 +555,16 @@ public final class FlowAssistant: ObservableObject {
         case .assertNotVisible: "assertNotVisible: \(selector)"
         case .assertEnabled: "assertEnabled: \(selector)"
         case .assertDisabled: "assertDisabled: \(selector)"
-        case .ask, .pass, .issue, .blocked: nil
+        case .scroll, .back, .ask, .pass, .issue, .blocked: nil
         }
+    }
+
+    /// Kaydırma yönü; boşsa aşağı. Küçük model yönü Türkçe yazabilir ("aşağı", "yukarı").
+    nonisolated static func scrollDirection(_ text: String?) -> ScrollDirection? {
+        let raw = (text ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if raw.isEmpty || raw.hasPrefix("aşağ") { return .down }
+        if raw.hasPrefix("yukar") { return .up }
+        return ScrollDirection(rawValue: raw)
     }
 
     // MARK: - Dışa aktarma

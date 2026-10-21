@@ -494,8 +494,12 @@ struct LinearReporter: IssueReporter {
 ### Küçük bir modelle nasıl güvenilir kalır
 
 - **Seçenekler yalnızca ekrandan:** Guided generation, eylemi `tap`, `type`, dört `assert…` komutu,
-  `ask`, `pass`, `issue` ve `blocked` ile; hedefi de o an ekranda bulunan öğelerle sınırlar. Model id
-  uyduramaz ya da hatalı satır yazamaz.
+  `scroll`, `back`, `ask`, `pass`, `issue` ve `blocked` ile; hedefi de o an ekranda bulunan öğelerle
+  sınırlar. Model id uyduramaz ya da hatalı satır yazamaz.
+- **Göremediğini kaydırarak arar:** Liste yalnızca ekrandakileri gösterir. Aradığı öğe listede yoksa
+  (uzun bir formun altındaki gönder butonu gibi) model aşağı ya da yukarı kaydırıp yeniden bakar. Yeni
+  bir şey göstermeyen kaydırma başarısız adım sayılır; böylece model sona geldiğinde kaydırmayı
+  sürdürmez. `back` bir ekran geri gider ya da açık sayfayı kapatır.
 - **Durumu görür:** Her öğe türüyle, pasif olup olmadığıyla ve metin alanlarında o anki değeriyle gelir.
 - **Her seferinde tek adım:** Her tur kısa bir özetle yeni bir oturum açar; böylece küçük bağlam
   penceresi (iOS 26'da 4.096 token) dolmaz.

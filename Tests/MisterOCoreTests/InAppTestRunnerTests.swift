@@ -51,6 +51,7 @@ final class FakeDriver: UIDriver {
     /// Listede aşağıda kalan sayfalar: her `scrollToFind` sıradakini görünür yapar.
     var pagesBelow: [[String]] = []
     var canGoBack = true
+    var onScroll: (ScrollDirection) -> Void = { _ in }
     private(set) var scrolls: [String] = []
 
     func texts(of selector: ElementSelector) -> [String]? {
@@ -59,6 +60,7 @@ final class FakeDriver: UIDriver {
 
     func scroll(_ direction: ScrollDirection, in selector: ElementSelector?) throws {
         scrolls.append("\(direction.rawValue) \(selector?.query ?? "-")")
+        onScroll(direction)
     }
 
     func scrollToFind(_ search: inout ScrollSearch) -> Bool {

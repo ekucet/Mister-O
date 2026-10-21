@@ -262,6 +262,88 @@ struct FlowAssistantTests {
         #expect(contexts[2].lastIssue?.contains("'type: label -> x' failed") == true)
     }
 
+    @Test func scrollsToReachAnElementBelowTheFoldAndGoesBack() async throws {
+        let driver = FakeDriver()
+        driver.visible = ["name_field"]
+        driver.onScroll = { direction in
+            if direction == .down { driver.visible = ["submit_button"] }
+        }
+        let check = PlannedCheck(title: "uzun form", expectation: "gönderilmeli")
+        let model = ScriptedModel(plan: [check], decisions: [check.title: [
+            .init(action: .type, target: "name_field", text: "Ada"),
+            .init(action: .scroll, target: "-", text: "down"),
+            .init(action: .tap, target: "submit_button"),
+            .init(action: .back, target: "-"),
+            .init(action: .pass, target: "-"),
+        ]])
+        let assistant = assistant(model, driver)
+
+        assistant.explore()
+        await waitUntilIdle(assistant)
+
+        #expect(assistant.checks[0].status == .passed("The expected behavior was seen."))
+        #expect(assistant.checks[0].steps == ["type: name_field -> Ada", "scroll: down", "tap: submit_button", "back"])
+        #expect(driver.scrolls == ["down -"])
+        #expect(driver.actions == ["type name_field=Ada", "tap submit_button", "back"])
+        let contexts = await model.contexts
+        #expect(contexts[2].targets == ["-", "submit_button"])
+        // Kaydırma adımı taslağa da girer; senaryo aynı yolu izler.
+        #expect(try #require(assistant.scenario(for: assistant.checks[0])).script.contains("scroll: down"))
+    }
+
+    @Test func scrollingThatShowsNothingNewCountsAsAFailedStep() async {
+        let driver = FakeDriver()
+        driver.visible = ["a"]
+        let check = PlannedCheck(title: "kaydır", expectation: "-")
+        let model = ScriptedModel(plan: [check], decisions: [check.title: [
+            .init(action: .scroll, target: "-", text: "down"),
+            .init(action: .scroll, target: "-", text: "yan"),
+            .init(action: .issue, target: "-", message: "buton yok"),
+        ]])
+        let assistant = assistant(model, driver)
+
+        assistant.explore()
+        await waitUntilIdle(assistant)
+
+        #expect(assistant.checks[0].steps.isEmpty)
+        #expect(assistant.checks[0].attempts == [
+            .init(line: "scroll: down", passed: false,
+                  note: "Nothing new appeared; the end of the scrollable area was reached."),
+        ])
+        let contexts = await model.contexts
+        #expect(contexts[1].lastIssue?.contains("end of the scrollable area") == true)
+        #expect(contexts[2].lastIssue?.contains("no direction") == true)
+        #expect(driver.scrolls == ["down -"])
+    }
+
+    @Test func scrollAndBackLines() {
+        let targets = ["-", "settings_list", "save_button"]
+        func line(_ action: AssistantAction, _ target: String?, _ text: String? = nil) -> String? {
+            FlowAssistant.line(for: AssistantDecision(action: action, target: target, text: text), allowedTargets: targets)
+        }
+        #expect(line(.scroll, "-", "down") == "scroll: down")
+        #expect(line(.scroll, "-", " UP ") == "scroll: up")
+        #expect(line(.scroll, nil, "") == "scroll: down")
+        #expect(line(.scroll, "-", "yukarı") == "scroll: up")
+        #expect(line(.scroll, "-", "AŞAĞI") == "scroll: down")
+        #expect(line(.scroll, "settings_list", "up") == "scroll: settings_list -> up")
+        // Listede olmayan hedef: model aradığı öğeyi yazmış olabilir; ekranın kendisi kayar.
+        #expect(line(.scroll, "uydurma", "down") == "scroll: down")
+        #expect(line(.scroll, "-", "yan") == nil)
+        #expect(line(.back, "-") == "back")
+        #expect(line(.back, nil) == "back")
+        #expect(line(.tap, "-") == nil)
+
+        for value in [line(.scroll, "settings_list", "up"), line(.back, "-")].compactMap({ $0 }) {
+            #expect((try? FlowParser().parse(value))?.count == 1, "\(value)")
+        }
+    }
+
+    @Test func instructionsTellTheModelToScroll() {
+        #expect(AssistantContext.instructions.contains("scroll down, or up, before deciding it is missing"))
+        #expect(AssistantContext.instructions.contains("Use \"-\" for scroll, back"))
+    }
+
     @Test func stopSkipsWhatIsLeft() async {
         let driver = FakeDriver()
         driver.visible = ["a"]

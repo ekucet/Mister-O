@@ -67,8 +67,9 @@ struct DemoAssistantModel: FlowAssistantModel {
         return fillAndSubmit(context)
     }
 
-    /// "Alanları doldur, butona bas; ilerlemeli": boş alanları türlerine göre doldurur, son aktif butona
-    /// basar; form ekrandan kalktıysa geçti, kalmadıysa sorun der.
+    /// "Alanları doldur, butona bas; ilerlemeli": boş alanları türlerine göre doldurur, istekte adı geçen
+    /// butona (ekranda yoksa aşağı kaydırıp; bulunamazsa son aktif butona) basar; form ekrandan kalktıysa
+    /// geçti, kalmadıysa sorun der.
     private func fillAndSubmit(_ context: AssistantContext) -> AssistantDecision {
         let fields = context.screen.filter(\.isTextInput)
         let filled = Set(context.steps.compactMap { line -> String? in
@@ -83,7 +84,16 @@ struct DemoAssistantModel: FlowAssistantModel {
                          message: t("Filling in \(name).", "\(name) alanını dolduruyorum."))
         }
         if !tapped {
-            guard let button = context.screen.last(where: { $0.isButton && $0.isEnabled }) else {
+            let request = (context.check.request ?? context.check.title).lowercased()
+            let buttons = context.screen.filter { $0.isButton && $0.isEnabled }
+            let named = buttons.first { request.contains(($0.name ?? $0.query).lowercased()) }
+            // İstekte adı geçen buton ekranda yoksa uzun bir formun altında olabilir: önce aşağı kaydır.
+            // Kaydırma düşerse (alan yok ya da sona gelindi) son aktif butona basılır.
+            if named == nil, context.lastIssue == nil {
+                return .init(action: .scroll, target: "-", text: "down",
+                             message: t("The button isn't on screen; scrolling down.", "Buton ekranda yok; aşağı kaydırıyorum."))
+            }
+            guard let button = named ?? buttons.last else {
                 return .init(action: .issue, target: "-",
                              message: t("The fields are filled but there's no enabled button to tap.", "Alanlar doldu ama basılabilecek aktif bir buton yok."))
             }
