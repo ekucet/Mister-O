@@ -270,7 +270,10 @@ struct FlowAssistantTests {
         let assistant = assistant(model, driver)
 
         assistant.explore()
-        try? await Task.sleep(for: .milliseconds(50))
+        // Plan gelip ilk kontrol koşmaya başlayınca durdur (sabit bir bekleme CI'da yetmiyordu).
+        for _ in 0..<500 where assistant.checks.isEmpty {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
         assistant.stop()
 
         #expect(assistant.stage == .finished)

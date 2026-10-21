@@ -8,7 +8,21 @@ final class FakeDriver: UIDriver {
     var onTap: (String) -> Void = { _ in }
     private(set) var actions: [String] = []
 
+    /// N'inci ekran sorgusunda ekranı değiştirir: "öğe birazdan gelir" testleri saate bağlı kalmasın
+    /// (CI simülatöründe ana thread yavaşken `Task.sleep` tabanlı tetikler gecikiyordu).
+    var changeAfterLookups: (count: Int, change: () -> Void)?
+    private var lookups = 0
+
+    private func lookUp() {
+        lookups += 1
+        if let pending = changeAfterLookups, lookups >= pending.count {
+            changeAfterLookups = nil
+            pending.change()
+        }
+    }
+
     func tap(_ selector: ElementSelector) throws {
+        lookUp()
         guard visible.contains(selector.query) else { throw DriverError.elementNotFound(selector) }
         guard !disabled.contains(selector.query) else { throw DriverError.elementDisabled(selector) }
         actions.append("tap \(selector.query)")
@@ -16,17 +30,20 @@ final class FakeDriver: UIDriver {
     }
 
     func typeText(_ text: String, into selector: ElementSelector) throws {
+        lookUp()
         guard visible.contains(selector.query) else { throw DriverError.elementNotFound(selector) }
         guard selector.query.hasSuffix("_field") else { throw DriverError.notTextInput(selector) }
         actions.append("type \(selector.query)=\(text)")
     }
 
     func isVisible(_ selector: ElementSelector) -> Bool {
-        visible.contains(selector.query)
+        lookUp()
+        return visible.contains(selector.query)
     }
 
     func isEnabled(_ selector: ElementSelector) -> Bool? {
-        visible.contains(selector.query) ? !disabled.contains(selector.query) : nil
+        lookUp()
+        return visible.contains(selector.query) ? !disabled.contains(selector.query) : nil
     }
 
     /// Öğelerin metni; verilmezse sorgunun kendisi.
@@ -85,15 +102,15 @@ struct InAppTestRunnerTests {
         #expect(runner.elapsed != nil)
     }
 
+    /// Sonunda geçmesi gereken testler: uzun süre sınırı yalnızca bir şeyler ters giderse beklenir.
+    private let patient = InAppTestRunner.Configuration(
+        elementTimeout: .seconds(30), pollInterval: .milliseconds(10), delayBetweenSteps: .zero
+    )
+
     @Test func waitsForElementThatAppearsLater() async {
         let driver = FakeDriver()
-        let runner = InAppTestRunner(driver: driver, configuration: .init(
-            elementTimeout: .seconds(2), pollInterval: .milliseconds(10), delayBetweenSteps: .zero
-        ))
-        Task {
-            try? await Task.sleep(for: .milliseconds(60))
-            driver.visible.insert("late")
-        }
+        let runner = InAppTestRunner(driver: driver, configuration: patient)
+        driver.changeAfterLookups = (5, { driver.visible.insert("late") })
 
         #expect(await runner.run("tap: late") == .passed)
         #expect(driver.actions == ["tap late"])
@@ -103,13 +120,8 @@ struct InAppTestRunnerTests {
         let driver = FakeDriver()
         driver.visible = ["save"]
         driver.disabled = ["save"]
-        let runner = InAppTestRunner(driver: driver, configuration: .init(
-            elementTimeout: .seconds(2), pollInterval: .milliseconds(10), delayBetweenSteps: .zero
-        ))
-        Task {
-            try? await Task.sleep(for: .milliseconds(60))
-            driver.disabled.removeAll()
-        }
+        let runner = InAppTestRunner(driver: driver, configuration: patient)
+        driver.changeAfterLookups = (5, { driver.disabled.removeAll() })
 
         #expect(await runner.run("tap: save") == .passed)
     }
@@ -162,13 +174,8 @@ struct InAppTestRunnerTests {
         let driver = FakeDriver()
         driver.visible = ["error", "save", "submit"]
         driver.disabled = ["submit"]
-        let runner = InAppTestRunner(driver: driver, configuration: .init(
-            elementTimeout: .seconds(2), pollInterval: .milliseconds(10), delayBetweenSteps: .zero
-        ))
-        Task {
-            try? await Task.sleep(for: .milliseconds(60))
-            driver.visible.remove("error")
-        }
+        let runner = InAppTestRunner(driver: driver, configuration: patient)
+        driver.changeAfterLookups = (5, { driver.visible.remove("error") })
 
         #expect(await runner.run("""
         assertNotVisible: error
@@ -222,7 +229,9 @@ struct InAppTestRunnerTests {
     @Test func scrollsTheListToFindAnElementBelowTheFold() async {
         let driver = FakeDriver()
         driver.pagesBelow = [["row_10"], ["row_20"], ["delete_button"]]
-        let runner = InAppTestRunner(driver: driver, configuration: scrolling)
+        var configuration = patient
+        configuration.scrollDelay = .zero
+        let runner = InAppTestRunner(driver: driver, configuration: configuration)
 
         #expect(await runner.run("tap: delete_button") == .passed)
         #expect(driver.scrolls == ["find", "find", "find"])
