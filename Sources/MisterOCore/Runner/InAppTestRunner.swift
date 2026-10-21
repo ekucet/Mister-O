@@ -6,7 +6,8 @@ import os
 ///
 /// Tüm iş `@MainActor` üzerinde, `async/await` ile yürür: UIKit erişimi ana thread'de kalır,
 /// `wait` ve öğe beklemeleri ise `Task.sleep` ile ana thread'i bloklamadan yapılır.
-/// `tap`, `type` ve `assertVisible` öğe ekrana gelene kadar `elementTimeout` boyunca yeniden dener.
+/// `tap`, `type` ve `assert…` adımları öğe ekrana gelene kadar `elementTimeout` boyunca yeniden dener;
+/// öğe ekranda yoksa ana listeyi kaydırarak da arar.
 @MainActor
 public final class InAppTestRunner: ObservableObject {
     public struct Configuration: Sendable {
@@ -18,17 +19,23 @@ public final class InAppTestRunner: ObservableObject {
         public var delayBetweenSteps: Duration
         /// İlk başarısız adımda koşuyu durdur.
         public var stopOnFailure: Bool
+        /// Öğe ekranda yoksa ana listeyi (scroll view, `List`, `UITableView`…) kaydırarak ara.
+        public var scrollsToFindElements: Bool
+        /// Ekran yeni açıldıysa öğe birazdan gelir; kaydırmaya ancak bu kadar bekledikten sonra başlanır.
+        var scrollDelay: Duration = .milliseconds(600)
 
         public init(
             elementTimeout: Duration = .seconds(5),
             pollInterval: Duration = .milliseconds(200),
             delayBetweenSteps: Duration = .milliseconds(400),
-            stopOnFailure: Bool = true
+            stopOnFailure: Bool = true,
+            scrollsToFindElements: Bool = true
         ) {
             self.elementTimeout = elementTimeout
             self.pollInterval = pollInterval
             self.delayBetweenSteps = delayBetweenSteps
             self.stopOnFailure = stopOnFailure
+            self.scrollsToFindElements = scrollsToFindElements
         }
 
         public static let `default` = Configuration()
@@ -40,9 +47,11 @@ public final class InAppTestRunner: ObservableObject {
     @Published public private(set) var elapsed: Duration?
 
     public var configuration: Configuration
+    /// Akışlardaki `{{ad}}` yer tutucularının değerleri (kurulumdaki `testData`).
+    public var variables: [String: String] = [:]
 
     private let driver: any UIDriver
-    private let parser = FlowParser()
+    private var parser: FlowParser { FlowParser(variables: variables) }
     private var currentTask: Task<Void, Never>?
     private let logger = Logger(subsystem: "MisterO", category: "Runner")
 
@@ -170,16 +179,16 @@ public final class InAppTestRunner: ObservableObject {
     private func execute(_ command: TestCommand) async throws {
         switch command {
         case .tap(let selector):
-            try await retrying { try driver.tap(selector) }
+            try await retrying(revealing: selector) { try driver.tap(selector) }
 
         case .typeText(let selector, let text):
-            try await retrying { try driver.typeText(text, into: selector) }
+            try await retrying(revealing: selector) { try driver.typeText(text, into: selector) }
 
         case .wait(let seconds):
             try await Task.sleep(for: .seconds(seconds))
 
         case .assertVisible(let selector):
-            try await retrying {
+            try await retrying(revealing: selector) {
                 guard driver.isVisible(selector) else { throw DriverError.elementNotFound(selector) }
             }
 
@@ -189,27 +198,63 @@ public final class InAppTestRunner: ObservableObject {
             }
 
         case .assertEnabled(let selector):
-            try await retrying {
+            try await retrying(revealing: selector) {
                 guard let enabled = driver.isEnabled(selector) else { throw DriverError.elementNotFound(selector) }
                 guard enabled else { throw DriverError.elementDisabled(selector) }
             }
 
         case .assertDisabled(let selector):
-            try await retrying {
+            try await retrying(revealing: selector) {
                 guard let enabled = driver.isEnabled(selector) else { throw DriverError.elementNotFound(selector) }
                 guard !enabled else { throw DriverError.elementEnabled(selector) }
             }
+
+        case .assertText(let selector, let expected):
+            try await retrying(revealing: selector) {
+                guard let texts = driver.texts(of: selector) else { throw DriverError.elementNotFound(selector) }
+                guard texts.contains(where: { Self.text($0, contains: expected) }) else {
+                    throw DriverError.textMismatch(selector, expected: expected, actual: texts.first ?? "")
+                }
+            }
+
+        case .scroll(let direction, let selector):
+            try await retrying { try driver.scroll(direction, in: selector) }
+
+        case .back:
+            try driver.goBack()
         }
     }
 
-    /// Yeniden denenebilir sürücü hatalarında zaman aşımına kadar ekranı tekrar tarar.
-    private func retrying(_ attempt: () throws -> Void) async throws {
-        let deadline = ContinuousClock.now + configuration.elementTimeout
+    /// Büyük/küçük harf duyarsız "içerir". Türkçe metinde "GELDİN" ile "geldin", "ÇIKIŞ" ile "çıkış" de eşleşir.
+    static func text(_ text: String, contains expected: String) -> Bool {
+        let wanted = expected.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !wanted.isEmpty else { return true }
+        return [Locale(identifier: "en_US"), Locale(identifier: "tr_TR")].contains { locale in
+            text.lowercased(with: locale).contains(wanted.lowercased(with: locale))
+        }
+    }
+
+    /// Yeniden denenebilir sürücü hatalarında zaman aşımına kadar ekranı tekrar tarar. `revealing` verilirse
+    /// ve öğe ekranda yoksa ana listeyi her denemede bir sayfa kaydırır (önce aşağı, sonra yukarı); liste
+    /// kaydıkça süre dolmaz, uzun listeler de sonuna kadar aranır.
+    private func retrying(revealing selector: ElementSelector? = nil, _ attempt: () throws -> Void) async throws {
+        let clock = ContinuousClock()
+        let scrollStart = clock.now + configuration.scrollDelay
+        var deadline = clock.now + configuration.elementTimeout
+        var search = ScrollSearch()
+        var canScroll = selector != nil && configuration.scrollsToFindElements
         while true {
             do {
                 try attempt()
                 return
-            } catch let error as DriverError where error.isRetryable && ContinuousClock.now < deadline {
+            } catch let error as DriverError where error.isRetryable && clock.now < deadline {
+                if canScroll, case .elementNotFound = error, clock.now >= scrollStart {
+                    if driver.scrollToFind(&search) {
+                        deadline = max(deadline, clock.now + configuration.pollInterval * 3)
+                    } else {
+                        canScroll = false
+                    }
+                }
                 try await Task.sleep(for: configuration.pollInterval)
             }
         }

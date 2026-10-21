@@ -105,4 +105,58 @@ struct FlowParserTests {
         let steps = try parser.parse("tap: \(FlowParser.quote(tricky))")
         #expect(steps.first?.command == .tap(ElementSelector(tricky)))
     }
+
+    @Test func parsesTextScrollAndBack() throws {
+        let steps = try parser.parse("""
+        assertText: welcome_label -> "Hoş geldin"
+        scroll: down
+        scroll: "settings_list" -> LEFT
+        back
+        - back:   # sheet'i kapat
+        """)
+
+        #expect(steps.map(\.command) == [
+            .assertText("welcome_label", text: "Hoş geldin"),
+            .scroll(.down, in: nil),
+            .scroll(.left, in: "settings_list"),
+            .back,
+            .back,
+        ])
+    }
+
+    @Test func rejectsBadDirectionsAndMissingArrows() {
+        #expect(throws: FlowParseError.self) { try parser.parse("scroll: sideways") }
+        #expect(throws: FlowParseError.self) { try parser.parse("assertText: welcome_label") }
+        #expect(throws: FlowParseError.self) { try parser.parse("backwards") }
+    }
+
+    @Test func fillsVariables() throws {
+        let parser = FlowParser(variables: ["Test hesabı e-postası": "qa@firma.com", "PIN": "1234"])
+        let steps = try parser.parse("""
+        type: email_field -> {{Test hesabı e-postası}}
+        type: "pin_field" -> "{{ pin }}-{{PIN}}"
+        """)
+
+        #expect(steps.map(\.command) == [
+            .typeText("email_field", text: "qa@firma.com"),
+            .typeText("pin_field", text: "1234-1234"),
+        ])
+        #expect(steps[0].source == "type: email_field -> {{Test hesabı e-postası}}")
+    }
+
+    @Test func reportsUnknownAndUnclosedVariables() {
+        let known = FlowParser(variables: ["PIN": "1234"])
+        #expect(throws: FlowParseError(issues: [.init(line: 1, message: "Unknown variable {{Şifre}}. Known → PIN")])) {
+            try known.parse("type: pin_field -> {{Şifre}}")
+        }
+        #expect(throws: FlowParseError(issues: [
+            .init(line: 1, message: "Unknown variable {{PIN}}. Add it to testData when installing Mister-O."),
+        ])) {
+            try FlowParser().parse("type: pin_field -> {{PIN}}")
+        }
+        #expect(throws: FlowParseError(issues: [.init(line: 1, message: "Unclosed variable: '{{' needs '}}'.")])) {
+            try known.parse("type: pin_field -> {{PIN")
+        }
+    }
+
 }

@@ -46,6 +46,12 @@ struct ElementAttributes {
     /// Kullanıcıya gösterilecek en iyi ad (inspector ve sorgu önerisi için).
     var displayName: String? { label ?? texts.first }
 
+    /// `assertText`'in baktığı metinler: alanın değeri, erişilebilirlik etiketi ve ekranda görünen metinler.
+    var readableTexts: [String] {
+        var seen = Set<String>()
+        return ([value, label].compactMap { $0 } + texts).filter { seen.insert($0).inserted }
+    }
+
     func match(_ query: String) -> MatchKind? {
         if identifier == query { return .identifier }
 

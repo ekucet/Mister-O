@@ -17,7 +17,9 @@
 "%@ should work with valid details" = "Geçerli bilgilerle %@ çalışmalı";
 "%@ shouldn't work with an empty form" = "Boş formla %@ çalışmamalı";
 "%@ shouldn't work with invalid details" = "Geçersiz bilgilerle %@ çalışmamalı";
+"%@ shows \"%@\", expected \"%@\"" = "%1$@ öğesinde \"%2$@\" yazıyor, beklenen: \"%3$@\"";
 "%@: expected behavior not seen" = "%@: beklenen davranış görülmedi";
+"%@: scenario failed" = "%@: senaryo başarısız";
 "%ld blocked" = "%ld sürdürülemedi";
 "%ld check" = "%ld kontrol";
 "%ld checks" = "%ld kontrol";
@@ -75,6 +77,7 @@
 "Element isn't a text field: %@" = "Öğe bir metin alanı değil: %@";
 "Elements" = "Öğeler";
 "Environment" = "Ortam";
+"Every step of the scenario should pass." = "Senaryonun her adımı geçmeli.";
 "Expected" = "Beklenen";
 "Failed" = "Başarısız";
 "failed" = "başarısız";
@@ -84,6 +87,7 @@
 "Found nothing to test on this screen." = "Bu ekranda test edilecek bir şey bulunamadı.";
 "I need some information to continue." = "Devam etmek için bilgiye ihtiyacım var.";
 "In code" = "Kod içi";
+"Invalid direction '%@'. Expected up, down, left or right" = "Geçersiz yön '%@'. up, down, left ya da right yazın";
 "Invalid duration '%@'. Expected 0–%ld seconds (e.g. wait: 1.5)" = "Geçersiz süre '%1$@'. 0–%2$ld arası saniye bekleniyor (ör. wait: 1.5)";
 "Invalid flow" = "Akış hatalı";
 "invalid flow" = "akış hatalı";
@@ -93,6 +97,7 @@
 "Log" = "Log";
 "Looking at the screen, planning checks…" = "Ekran inceleniyor, kontroller planlanıyor…";
 "Minimize panel" = "Paneli küçült";
+"Missing '->' in 'assertText'. Example → assertText: \"welcome_label\" -> \"Welcome\"" = "'assertText' komutunda '->' eksik. Örnek → assertText: \"welcome_label\" -> \"Hoş geldin\"";
 "Missing '->' in 'type'. Example → type: \"email_field\" -> \"text\"" = "'type' komutunda '->' eksik. Örnek → type: \"email_field\" -> \"metin\"";
 "Missing ':'. Expected format → command: value" = "':' eksik. Beklenen biçim → komut: değer";
 "Missing value." = "Değer eksik.";
@@ -100,7 +105,10 @@
 "Mister-O test panel" = "Mister-O test paneli";
 "no reset" = "reset yok";
 "No scenarios yet. Test a screen in the Assistant tab and save the passing checks as drafts." = "Henüz senaryo yok. Asistan sekmesinde bir ekranı test edip geçen kontrolleri taslak olarak kaydedebilirsiniz.";
+"No scrollable area around %@" = "%@ çevresinde kaydırılabilir alan yok";
+"No scrollable area on screen" = "Ekranda kaydırılabilir alan yok";
 "Not on screen: %@" = "Ekranda bulunamadı: %@";
+"Nothing to go back from: no previous screen or open sheet" = "Geri gidilecek yer yok: önceki ekran ya da açık bir sayfa yok";
 "Offline · cache from %@" = "Çevrimdışı · %@ önbelleği";
 "Open in editor" = "Editöre al";
 "Open ticket (%@)" = "Kayıt aç (%@)";
@@ -173,8 +181,11 @@
 "Try again" = "Tekrar dene";
 "Turn it on in Settings → Apple Intelligence." = "Ayarlar → Apple Intelligence'tan özelliği açın.";
 "Unclosed quote." = "Kapanmamış tırnak.";
+"Unclosed variable: '{{' needs '}}'." = "Kapanmamış değişken: '{{' için '}}' gerekli.";
 "Unexpected content: '%@'" = "Beklenmeyen içerik: '%@'";
-"Unknown command '%@'. Supported → tap, type, wait, assertVisible, assertNotVisible, assertEnabled, assertDisabled" = "Bilinmeyen komut '%@'. Desteklenenler → tap, type, wait, assertVisible, assertNotVisible, assertEnabled, assertDisabled";
+"Unknown command '%@'. Supported → tap, type, wait, assertVisible, assertNotVisible, assertEnabled, assertDisabled, assertText, scroll, back" = "Bilinmeyen komut '%@'. Desteklenenler → tap, type, wait, assertVisible, assertNotVisible, assertEnabled, assertDisabled, assertText, scroll, back";
+"Unknown variable {{%@}}. Add it to testData when installing Mister-O." = "Bilinmeyen değişken {{%@}}. Mister-O'yu kurarken testData'ya ekleyin.";
+"Unknown variable {{%@}}. Known → %@" = "Bilinmeyen değişken {{%1$@}}. Bilinenler → %2$@";
 "Update scenario" = "Senaryoyu güncelle";
 "What I know" = "Bildiklerim";
 "Write a flow and tap ▶︎ Run. To see the ids on the screen, open the “Elements” tab." = "Akışı yazın ve ▶︎ Çalıştır'a basın. Ekrandaki id'leri görmek için “Öğeler” sekmesine bakın.";

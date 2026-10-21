@@ -9,17 +9,28 @@ import Foundation
 ///     assertVisible: "welcome_label"
 ///     assertNotVisible: "error_label"
 ///     assertDisabled: "login_button"
+///     assertText: "welcome_label" -> "Hoş geldin"
+///     scroll: down
+///     back
+///     type: "password_field" -> "{{Test hesabı şifresi}}"
 ///
 /// - Boş satırlar ve `#` ile başlayan satırlar atlanır; satır sonu yorumu (` # ...`) desteklenir.
 /// - YAML listesi gibi `- tap: ...` yazımı kabul edilir; komut adları büyük/küçük harf duyarsızdır.
 /// - Değerler tırnaklı (`"..."`, `'...'`) ya da tırnaksız yazılabilir. `->` veya ` #` içeren
 ///   değerler tırnaklanmalıdır. iOS klavyesinin akıllı tırnakları (“ ” ‘ ’) da kabul edilir.
+/// - `{{ad}}` yer tutucuları `variables`'taki değerle değişir (kurulumdaki `testData`); şifreler akışa
+///   ya da katalog JSON'una yazılmaz, raporda da yer tutucu görünür.
 /// - Hatalı satırlar toplanır ve hepsi tek seferde `FlowParseError` olarak döner.
 public struct FlowParser: Sendable {
     /// `wait` için izin verilen en uzun süre (saniye).
     public static let maxWaitSeconds: Double = 300
 
-    public init() {}
+    /// `{{ad}}` yer tutucularının değerleri.
+    public var variables: [String: String]
+
+    public init(variables: [String: String] = [:]) {
+        self.variables = variables
+    }
 
     public func parse(_ script: String) throws(FlowParseError) -> [TestStep] {
         var steps: [TestStep] = []
@@ -78,11 +89,16 @@ public struct FlowParser: Sendable {
             line = line.dropFirst(2).drop(while: \.isWhitespace)
         }
 
+        // Değer almayan komut: `back` (ya da `back:`).
+        let bareCommand = line.components(separatedBy: " #")[0].trimmingCharacters(in: .whitespaces).lowercased()
+        if bareCommand == "back" || bareCommand == "back:" {
+            return .back
+        }
         guard let colon = line.firstIndex(of: ":") else {
             throw LineError(L("Missing ':'. Expected format → command: value"))
         }
         let keyword = line[..<colon].trimmingCharacters(in: .whitespaces)
-        var scanner = ArgumentScanner(line[line.index(after: colon)...])
+        var scanner = ArgumentScanner(line[line.index(after: colon)...], variables: variables)
 
         let command: TestCommand
         switch keyword.lowercased() {
@@ -118,13 +134,36 @@ public struct FlowParser: Sendable {
         case "assertdisabled":
             command = .assertDisabled(ElementSelector(try scanner.value()))
 
+        case "asserttext":
+            let target = try scanner.value(stopsAtArrow: true)
+            guard scanner.consumeArrow() else {
+                throw LineError(L("Missing '->' in 'assertText'. Example → assertText: \"welcome_label\" -> \"Welcome\""))
+            }
+            command = .assertText(ElementSelector(target), text: try scanner.value())
+
+        case "scroll":
+            // `scroll: down` ya da `scroll: "liste" -> down`
+            let first = try scanner.value(stopsAtArrow: true)
+            if scanner.consumeArrow() {
+                command = .scroll(try Self.direction(try scanner.value()), in: ElementSelector(first))
+            } else {
+                command = .scroll(try Self.direction(first), in: nil)
+            }
+
         default:
-            throw LineError(L("Unknown command '%@'. Supported → tap, type, wait, assertVisible, assertNotVisible, assertEnabled, assertDisabled",
+            throw LineError(L("Unknown command '%@'. Supported → tap, type, wait, assertVisible, assertNotVisible, assertEnabled, assertDisabled, assertText, scroll, back",
                               keyword))
         }
 
         try scanner.expectEnd()
         return command
+    }
+
+    private static func direction(_ raw: String) throws(LineError) -> ScrollDirection {
+        guard let direction = ScrollDirection(rawValue: raw.trimmingCharacters(in: .whitespaces).lowercased()) else {
+            throw LineError(L("Invalid direction '%@'. Expected up, down, left or right", raw))
+        }
+        return direction
     }
 }
 
@@ -168,10 +207,12 @@ struct ArgumentScanner {
     private static let singleQuotes: Set<Character> = ["'", "‘", "’"]
 
     private let characters: [Character]
+    private let variables: [String: String]
     private var position = 0
 
-    init(_ text: Substring) {
+    init(_ text: Substring, variables: [String: String] = [:]) {
         characters = Array(text)
+        self.variables = variables
     }
 
     /// Tırnaklı ya da tırnaksız tek bir değer okur.
@@ -193,7 +234,31 @@ struct ArgumentScanner {
         guard allowsEmpty || !value.trimmingCharacters(in: .whitespaces).isEmpty else {
             throw LineError(L("The value can't be empty."))
         }
-        return value
+        return try substitutingVariables(in: value)
+    }
+
+    /// `{{ad}}` → `variables["ad"]`. Ad büyük/küçük harf duyarsız da eşleşir; bilinmeyen ad satır hatasıdır.
+    private func substitutingVariables(in value: String) throws(LineError) -> String {
+        guard value.contains("{{") else { return value }
+        var result = ""
+        var rest = Substring(value)
+        while let open = rest.range(of: "{{") {
+            guard let close = rest[open.upperBound...].range(of: "}}") else {
+                throw LineError(L("Unclosed variable: '{{' needs '}}'."))
+            }
+            let name = rest[open.upperBound..<close.lowerBound].trimmingCharacters(in: .whitespaces)
+            let match = variables[name]
+                ?? variables.first { $0.key.compare(name, options: [.caseInsensitive]) == .orderedSame }?.value
+            guard let match else {
+                let known = variables.keys.sorted().joined(separator: ", ")
+                throw LineError(known.isEmpty
+                    ? L("Unknown variable {{%@}}. Add it to testData when installing Mister-O.", name)
+                    : L("Unknown variable {{%@}}. Known → %@", name, known))
+            }
+            result += rest[..<open.lowerBound] + match
+            rest = rest[close.upperBound...]
+        }
+        return result + rest
     }
 
     /// `->` (veya `→`) ayırıcısını tüketir.

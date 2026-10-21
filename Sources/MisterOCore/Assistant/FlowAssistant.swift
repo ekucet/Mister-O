@@ -541,7 +541,17 @@ public final class FlowAssistant: ObservableObject {
         return Scenario(name: check.title, summary: check.plan.expectation, tags: [L("draft"), L("assistant")],
                         resetsApp: resetApp != nil && navigator.startIsAppRoot,
                         goal: check.plan.request?.components(separatedBy: "\n(").first ?? check.title,
-                        script: check.steps.joined(separator: "\n"))
+                        script: check.steps.map(templated).joined(separator: "\n"))
+    }
+
+    /// Uygulamanın verdiği test verisi taslağa değeriyle değil `{{ad}}` olarak yazılır: şifre katalog JSON'una
+    /// girmez, senaryo koşarken runner değeri `testData`'dan alır. Testçinin cevapları cihaza özel olduğu için
+    /// olduğu gibi kalır.
+    private func templated(_ line: String) -> String {
+        guard line.hasPrefix("type:"), let step = try? FlowParser().parse(line).first,
+              case .typeText(let selector, let text) = step.command, !text.isEmpty,
+              let fact = appFacts.first(where: { $0.answer == text }) else { return line }
+        return "type: \(FlowParser.literal(selector.query)) -> \(FlowParser.literal("{{\(fact.question)}}"))"
     }
 
     /// Hata kaydının parçaları; takip aracına (`IssueReporter`) bu gönderilir.

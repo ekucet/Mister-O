@@ -28,6 +28,34 @@ final class FakeDriver: UIDriver {
     func isEnabled(_ selector: ElementSelector) -> Bool? {
         visible.contains(selector.query) ? !disabled.contains(selector.query) : nil
     }
+
+    /// Öğelerin metni; verilmezse sorgunun kendisi.
+    var texts: [String: String] = [:]
+    /// Listede aşağıda kalan sayfalar: her `scrollToFind` sıradakini görünür yapar.
+    var pagesBelow: [[String]] = []
+    var canGoBack = true
+    private(set) var scrolls: [String] = []
+
+    func texts(of selector: ElementSelector) -> [String]? {
+        visible.contains(selector.query) ? [texts[selector.query] ?? selector.query] : nil
+    }
+
+    func scroll(_ direction: ScrollDirection, in selector: ElementSelector?) throws {
+        scrolls.append("\(direction.rawValue) \(selector?.query ?? "-")")
+    }
+
+    func scrollToFind(_ search: inout ScrollSearch) -> Bool {
+        guard !pagesBelow.isEmpty else { return false }
+        search.steps += 1
+        scrolls.append("find")
+        visible.formUnion(pagesBelow.removeFirst())
+        return true
+    }
+
+    func goBack() throws {
+        guard canGoBack else { throw DriverError.nothingToGoBack }
+        actions.append("back")
+    }
 }
 
 @MainActor
@@ -180,4 +208,83 @@ struct InAppTestRunnerTests {
         #expect(runner.results.map(\.status.symbol) == ["–", "–"])
         #expect(driver.actions.isEmpty)
     }
+
+    // MARK: - Kaydırma, metin, geri, değişkenler
+
+    private var scrolling: InAppTestRunner.Configuration {
+        var configuration = InAppTestRunner.Configuration(
+            elementTimeout: .milliseconds(150), pollInterval: .milliseconds(10), delayBetweenSteps: .zero
+        )
+        configuration.scrollDelay = .zero
+        return configuration
+    }
+
+    @Test func scrollsTheListToFindAnElementBelowTheFold() async {
+        let driver = FakeDriver()
+        driver.pagesBelow = [["row_10"], ["row_20"], ["delete_button"]]
+        let runner = InAppTestRunner(driver: driver, configuration: scrolling)
+
+        #expect(await runner.run("tap: delete_button") == .passed)
+        #expect(driver.scrolls == ["find", "find", "find"])
+        #expect(driver.actions == ["tap delete_button"])
+    }
+
+    @Test func givesUpWhenTheListEndsAndDoesNotScrollForNotVisible() async {
+        let driver = FakeDriver()
+        driver.pagesBelow = [["row_10"]]
+        let runner = InAppTestRunner(driver: driver, configuration: scrolling)
+
+        #expect(await runner.run("assertNotVisible: row_10") == .passed)
+        #expect(driver.scrolls.isEmpty)
+
+        #expect(await runner.run("tap: missing") == .failed)
+        #expect(driver.scrolls == ["find"])
+
+        var off = scrolling
+        off.scrollsToFindElements = false
+        driver.pagesBelow = [["late"]]
+        #expect(await InAppTestRunner(driver: driver, configuration: off).run("tap: late") == .failed)
+        #expect(driver.scrolls == ["find"])
+    }
+
+    @Test func assertTextLooksForTheTextInsideTheElement() async {
+        let driver = FakeDriver()
+        driver.visible = ["welcome_label"]
+        driver.texts = ["welcome_label": "Hoş geldin, tester@mistero.app"]
+        let runner = InAppTestRunner(driver: driver, configuration: fast)
+
+        #expect(await runner.run(#"assertText: welcome_label -> "HOŞ GELDİN""#) == .passed)
+        #expect(await runner.run("assertText: welcome_label -> Güle güle") == .failed)
+        guard case .failed(let message) = runner.results[0].status else {
+            Issue.record("düşmeliydi")
+            return
+        }
+        #expect(message.hasPrefix(#""welcome_label" shows "Hoş geldin, tester@mistero.app", expected "Güle güle""#))
+    }
+
+    @Test func scrollAndBackCommandsGoToTheDriver() async {
+        let driver = FakeDriver()
+        let runner = InAppTestRunner(driver: driver, configuration: fast)
+
+        #expect(await runner.run("scroll: down\nscroll: \"settings_list\" -> left\nback") == .passed)
+        #expect(driver.scrolls == ["down -", "left settings_list"])
+        #expect(driver.actions == ["back"])
+
+        driver.canGoBack = false
+        #expect(await runner.run("back") == .failed)
+        #expect(runner.results[0].status == .failed("Nothing to go back from: no previous screen or open sheet"))
+    }
+
+    @Test func fillsVariablesFromTestDataButKeepsThePlaceholderInTheReport() async {
+        let driver = FakeDriver()
+        driver.visible = ["password_field"]
+        let runner = InAppTestRunner(driver: driver, configuration: fast)
+        runner.variables = ["Test hesabı şifresi": "s3cret"]
+
+        #expect(await runner.run("type: password_field -> {{test hesabı şifresi}}") == .passed)
+        #expect(driver.actions == ["type password_field=s3cret"])
+        #expect(runner.reportText.contains("{{test hesabı şifresi}}"))
+        #expect(!runner.reportText.contains("s3cret"))
+    }
+
 }
