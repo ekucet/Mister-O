@@ -6,8 +6,8 @@
       "description": "Geçerli e-posta ve şifreyle giriş yapar, ana sayfayı doğrular.",
       "tags": ["smoke", "auth"],
       "steps": [
-        "type: email_field -> tester@mistero.app",
-        "type: password_field -> 123456",
+        "type: email_field -> {{Test hesabı e-postası}}",
+        "type: password_field -> {{Test hesabı şifresi}}",
         "tap: login_button",
         "assertVisible: welcome_label"
       ]
@@ -28,6 +28,24 @@
       ]
     },
     {
+      "id": "delete-account",
+      "name": "Hesap silme (uyarı)",
+      "description": "Ayarların en altındaki butona kaydırır, uyarıda Sil'e basar ve geri döner.",
+      "tags": ["smoke", "ayarlar"],
+      "goal": "Hesap silme onaylanınca durum 'Hesap silindi' olmalı.",
+      "steps": [
+        "type: email_field -> {{Test hesabı e-postası}}",
+        "type: password_field -> {{Test hesabı şifresi}}",
+        "tap: login_button",
+        "tap: Ayarlar",
+        "tap: delete_account_button",
+        "tap: Sil",
+        "assertText: account_status -> Hesap silindi",
+        "back",
+        "assertVisible: welcome_label"
+      ]
+    },
+    {
       "id": "welcome-shows-email",
       "name": "Hoş geldin mesajında e-posta",
       "description": "Girişten sonra mesajın kullanıcının e-postasını içerdiğini doğrular.",
@@ -36,7 +54,7 @@
         "type: email_field -> qa@mistero.app",
         "type: password_field -> 654321",
         "tap: login_button",
-        "assertVisible: 'Hoş geldin, qa@mistero.app'"
+        "assertText: welcome_label -> qa@mistero.app"
       ]
     },
     {

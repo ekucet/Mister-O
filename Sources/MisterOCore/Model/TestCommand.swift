@@ -32,6 +32,28 @@ public enum TestCommand: Equatable, Sendable {
     case assertEnabled(ElementSelector)
     /// `assertDisabled: "login_button"`
     case assertDisabled(ElementSelector)
+    /// `assertText: "welcome_label" -> "Hoş geldin"`: öğenin metni beklenen metni içerir.
+    case assertText(ElementSelector, text: String)
+    /// `scroll: down` ya da `scroll: "settings_list" -> down`
+    case scroll(ScrollDirection, in: ElementSelector?)
+    /// `back`: navigasyonda bir geri gider ya da açık sayfayı (sheet, uyarı) kapatır.
+    case back
+}
+
+/// `scroll` komutunun yönü: içerik bu yöne doğru ilerler (`down` listenin aşağısını gösterir).
+public enum ScrollDirection: String, CaseIterable, Sendable {
+    case up, down, left, right
+
+    public var opposite: ScrollDirection {
+        switch self {
+        case .up: .down
+        case .down: .up
+        case .left: .right
+        case .right: .left
+        }
+    }
+
+    public var isVertical: Bool { self == .up || self == .down }
 }
 
 /// Parser çıktısı: komut + testçiye geri gösterilecek kaynak satır bilgisi.

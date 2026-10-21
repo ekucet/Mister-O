@@ -114,7 +114,7 @@ struct TestPanelView: View {
                 .frame(minHeight: 160, maxHeight: 440)
             case .scenarios:
                 ScenarioListView(store: scenarios, isBusy: isBusy,
-                                 canRepair: assistant.availability == .available,
+                                 canRepair: assistant.availability == .available, issueReporter: issueReporter,
                                  onRun: run, onRunAll: runSuite, onEdit: edit, onRepair: repair, onStop: stop)
                     .frame(minHeight: 160, maxHeight: 440)
             case .advanced:

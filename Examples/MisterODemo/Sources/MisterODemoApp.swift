@@ -22,6 +22,7 @@ struct MisterODemoApp: App {
                     testData: ["Test hesabı e-postası": "tester@mistero.app", "Test hesabı şifresi": "123456"],
                     issueReporter: DemoFlow.issueReporter
                 )
+                .task { await DemoFlow.autorun() }
                 #endif
         }
     }
@@ -55,6 +56,26 @@ enum DemoFlow {
         ProcessInfo.processInfo.environment["MISTERO_ASSISTANT"] == "demo" ? DemoAssistantModel() : nil
     }
 
+    /// `MISTERO_AUTORUN=id1,id2` verilirse açılışta bu senaryolar koşar ve rapor konsola yazılır
+    /// (`xcrun simctl launch --console`). Elle dokunmadan duman testi için.
+    @MainActor static func autorun() async {
+        guard let raw = ProcessInfo.processInfo.environment["MISTERO_AUTORUN"] else { return }
+        let ids = raw.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+        while [nil, .idle, .loading].contains(MisterO.scenarios?.status) {
+            try? await Task.sleep(for: .milliseconds(200))
+        }
+        guard let store = MisterO.scenarios else { return }
+        let selected = ids.compactMap { id in store.allScenarios.first { $0.id == id } }
+        await store.runSuite(selected)
+        print("MISTERO-REPORT-BEGIN\n\(store.suiteReportText)")
+        for scenario in selected {
+            for result in store.runs[scenario.id]?.steps ?? [] {
+                print("  [\(scenario.id)] \(result.status.symbol) \(result.step.source)")
+            }
+        }
+        print("MISTERO-REPORT-END")
+    }
+
     /// Paketteki mistero-scenarios.json; `MISTERO_SCENARIOS_URL` verilirse uzaktan yüklenir.
     static var catalog: ScenarioFeed {
         if let raw = ProcessInfo.processInfo.environment["MISTERO_SCENARIOS_URL"], let url = URL(string: raw) {
@@ -68,6 +89,7 @@ enum DemoFlow {
 enum Route: Hashable {
     case welcome(email: String)
     case uikit
+    case settings
 }
 
 @MainActor
@@ -92,6 +114,8 @@ struct RootView: View {
                     case .uikit:
                         ProfileScreen()
                             .navigationTitle("UIKit")
+                    case .settings:
+                        SettingsView()
                     }
                 }
         }

@@ -191,4 +191,49 @@ struct ScenarioStoreTests {
         #expect(store.runs[scenarios[1].id] == nil)
         #expect(driver.actions.isEmpty)
     }
+
+    @Test func failedScenarioKeepsAScreenshotAndOpensOneTicket() async throws {
+        let driver = FakeDriver()
+        driver.visible = ["a"]
+        let shot = Data([0x89, 0x50, 0x4E, 0x47])
+        let store = ScenarioStore(feed: nil, runner: InAppTestRunner(driver: driver, configuration: fast),
+                                  settleTime: .zero, cacheDirectory: nil, screenshot: { shot })
+        let broken = Scenario(name: "Silme", goal: "Hesap silinebilmeli", script: "tap: a\ntap: missing\ntap: a")
+        let fine = Scenario(name: "İyi", script: "tap: a")
+
+        await store.runSuite([broken, fine])
+
+        #expect(store.runs[broken.id]?.screenshot == shot)
+        #expect(store.runs[fine.id]?.screenshot == nil)
+        #expect(store.bugReport(for: fine, environment: "test") == nil)
+
+        let report = try #require(store.bugReport(for: broken, environment: "iPhone · iOS 27"))
+        #expect(report.title == "Silme: scenario failed")
+        #expect(report.steps.count == 2)
+        #expect(report.steps[0] == "tap: a")
+        #expect(report.steps[1].hasPrefix("tap: missing  ← Not on screen"))
+        #expect(report.expected == "Hesap silinebilmeli")
+        #expect(report.actual.hasPrefix("Line 2: Not on screen"))
+        #expect(report.attachments.map(\.filename) == ["screenshot.png"])
+
+        let reporter = RecordingReporter()
+        await store.openIssue(for: broken, environment: "test", using: reporter)
+        await store.openIssue(for: broken, environment: "test", using: reporter)   // ikinci kez açılmaz
+        #expect(await reporter.count == 1)
+        #expect(store.runs[broken.id]?.issueReceipt == IssueReceipt(key: "QA-1", url: nil))
+
+        // Yeniden koşunca eski kayıt temizlenir.
+        await store.run(broken)
+        #expect(store.runs[broken.id]?.issueReceipt == nil)
+    }
+
+    @Test func validatesVariablesAgainstTheRunnersTestData() {
+        let runner = InAppTestRunner(driver: FakeDriver())
+        runner.variables = ["Şifre": "1"]
+        let store = ScenarioStore(feed: nil, runner: runner, cacheDirectory: nil)
+
+        #expect(store.validation(for: Scenario(name: "a", script: "type: p_field -> {{Şifre}}")).isValid)
+        #expect(!store.validation(for: Scenario(name: "b", script: "type: p_field -> {{Yok}}")).isValid)
+    }
+
 }

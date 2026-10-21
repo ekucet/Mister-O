@@ -270,7 +270,10 @@ struct FlowAssistantTests {
         let assistant = assistant(model, driver)
 
         assistant.explore()
-        try? await Task.sleep(for: .milliseconds(50))
+        // Plan gelip ilk kontrol koşmaya başlayınca durdur (sabit bir bekleme CI'da yetmiyordu).
+        for _ in 0..<500 where assistant.checks.isEmpty {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
         assistant.stop()
 
         #expect(assistant.stage == .finished)
@@ -385,6 +388,24 @@ struct FlowAssistantTests {
         second.forget(second.answers[0])
         #expect(memory.load().isEmpty)
         #expect(second.knownFacts == [appFact])
+    }
+
+    @Test func draftsUseTestDataPlaceholdersInsteadOfValues() async throws {
+        let driver = FakeDriver()
+        driver.visible = ["email_field", "password_field"]
+        let check = PlannedCheck(title: "giriş", expectation: "-")
+        let model = ScriptedModel(plan: [check], decisions: [check.title: [
+            .init(action: .type, target: "email_field", text: "qa@firma.com"),
+            .init(action: .type, target: "password_field", text: "elle-yazilan"),
+            .init(action: .pass, target: "-"),
+        ]])
+        let assistant = assistant(model, driver, appFacts: [AssistantAnswer(question: "Test e-postası", answer: "qa@firma.com")])
+
+        assistant.explore()
+        await waitUntilIdle(assistant)
+
+        let script = try #require(assistant.scenario(for: assistant.checks[0])).script
+        #expect(script == "type: email_field -> {{Test e-postası}}\ntype: password_field -> elle-yazilan")
     }
 
     @Test func repairsAScenarioThatNoLongerWorks() async throws {

@@ -8,6 +8,8 @@ import UIKit
 /// - `UIControl` → `sendActions(for:)` (`UISwitch` için değer değişimi)
 /// - `UITableViewCell` / `UICollectionViewCell` → seçim + delegate `didSelect`
 /// - SwiftUI ve diğer erişilebilirlik düğümleri → `accessibilityActivate()`
+/// - Uyarı / onay penceresi butonları (`UIAlertController`, SwiftUI `.alert`, `.confirmationDialog`) →
+///   butonun `UIAlertAction`'ı; bu tek yerde private bir UIKit metodu kullanılır (bkz. `triggerAlertAction`)
 /// - Metin → `becomeFirstResponder()` + `UIKeyInput.insertText(_:)`; böylece delegate'ler,
 ///   `.editingChanged` ve SwiftUI binding'leri gerçek klavye girişindeki gibi güncellenir.
 @MainActor
@@ -22,6 +24,8 @@ public struct ActionExecutor {
     // MARK: - Tap
 
     public func tap(_ element: UIElement) throws {
+        if try triggerAlertAction(for: element) { return }
+
         let anchor: UIView
         switch element.backing {
         case .view(let view):
@@ -95,6 +99,40 @@ public struct ActionExecutor {
         default:
             return false
         }
+    }
+
+    // MARK: - Uyarılar
+
+    /// Uyarı butonları `UIControl` değildir; açık API'de bir `UIAlertAction`'ı tetiklemenin yolu yok. Öğe bir
+    /// `UIAlertController`'ın içindeyse başlığı tutan action bulunur ve UIKit'in dokunuşta izlediği yol
+    /// (`_dismissWithAction:`) çağrılır: uyarı kapanır, ardından handler (SwiftUI butonunun eylemi) çalışır.
+    /// Bu metot yoksa handler, uyarı kapandıktan sonra elle çağrılır.
+    private func triggerAlertAction(for element: UIElement) throws -> Bool {
+        let view: UIView = switch element.backing {
+        case .view(let view): view
+        case .accessibilityNode(_, let host): host
+        }
+        guard let alert = sequence(first: view as UIResponder, next: { $0.next })
+            .lazy.compactMap({ $0 as? UIAlertController }).first else { return false }
+
+        let attributes = ElementAttributes(element.object)
+        let titles = Set(([attributes.label, element.selector.query].compactMap { $0 } + attributes.texts).map(\.trimmed))
+        guard let action = alert.actions.first(where: { titles.contains(($0.title ?? "").trimmed) }) else { return false }
+        guard action.isEnabled else { throw DriverError.elementDisabled(element.selector) }
+
+        let dismissWithAction = NSSelectorFromString("_dismissWithAction:")
+        if alert.responds(to: dismissWithAction) {
+            alert.perform(dismissWithAction, with: action)
+            return true
+        }
+        let handlerKey = NSSelectorFromString("handler")
+        guard action.responds(to: handlerKey), let block = action.perform(handlerKey)?.takeUnretainedValue() else {
+            return false
+        }
+        typealias Handler = @convention(block) (UIAlertAction) -> Void
+        let handler = unsafeBitCast(block, to: Handler.self)
+        alert.dismiss(animated: true) { handler(action) }
+        return true
     }
 
     // MARK: - Type

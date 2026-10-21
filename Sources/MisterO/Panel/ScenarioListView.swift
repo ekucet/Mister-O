@@ -9,6 +9,8 @@ struct ScenarioListView: View {
     let isBusy: Bool
     /// Asistan kullanılabiliyorsa düşen senaryolarda "Asistanla onar" görünür.
     let canRepair: Bool
+    /// Verildiyse düşen senaryolarda "Kayıt aç" görünür.
+    let issueReporter: (any IssueReporter)?
     let onRun: (Scenario) -> Void
     let onRunAll: ([Scenario]) -> Void
     let onEdit: (Scenario) -> Void
@@ -63,6 +65,7 @@ struct ScenarioListView: View {
                             isExpanded: expandedID == scenario.id,
                             canRun: !isBusy,
                             canRepair: canRepair && !isBusy,
+                            issue: { ScenarioIssueActions(store: store, scenario: scenario, reporter: issueReporter) },
                             onToggle: { expandedID = expandedID == scenario.id ? nil : scenario.id },
                             onRun: { onRun(scenario) },
                             onEdit: { onEdit(scenario) },
@@ -210,7 +213,7 @@ private struct SuiteSummaryView: View {
     }
 }
 
-private struct ScenarioRow: View {
+private struct ScenarioRow<Issue: View>: View {
     let scenario: Scenario
     let isDraft: Bool
     let validation: ScenarioStore.Validation
@@ -219,6 +222,8 @@ private struct ScenarioRow: View {
     let isExpanded: Bool
     let canRun: Bool
     let canRepair: Bool
+    /// Düşen senaryonun hata kaydı ve "Kayıt aç" butonu.
+    let issue: () -> Issue
     let onToggle: () -> Void
     let onRun: () -> Void
     let onEdit: () -> Void
@@ -304,6 +309,9 @@ private struct ScenarioRow: View {
                     StepRow(result: result)
                 }
             }
+            if let run, run.state == .failed {
+                issue()
+            }
             if canRepair, let run, run.state != .passed, run.state != .cancelled {
                 Button(action: onRepair) {
                     Label(L("Repair with assistant"), systemImage: "wrench.and.screwdriver")
@@ -346,6 +354,73 @@ private struct ScenarioRow: View {
             default:
                 Image(systemName: "circle").foregroundStyle(Color.gray)
             }
+        }
+    }
+}
+
+/// Düşen senaryo: ekran görüntüsü, takip aracında kayıt aç (varsa), hata kaydını kopyala/paylaş.
+private struct ScenarioIssueActions: View {
+    @ObservedObject var store: ScenarioStore
+    let scenario: Scenario
+    let reporter: (any IssueReporter)?
+    @State private var copied = false
+
+    var body: some View {
+        if let report = store.bugReport(for: scenario, environment: DeviceEnvironment.summary) {
+            let run = store.runs[scenario.id]
+            VStack(alignment: .leading, spacing: 6) {
+                if let data = run?.screenshot, let image = UIImage(data: data) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .frame(height: 96)
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.gray.opacity(0.4)))
+                        .accessibilityLabel(L("Screenshot of the issue"))
+                }
+                if let reporter {
+                    if let receipt = run?.issueReceipt {
+                        let title = receipt.key.map { L("Ticket opened: %@", $0) } ?? L("Ticket opened")
+                        if let url = receipt.url {
+                            Link(destination: url) { Label(title, systemImage: "arrow.up.right.square") }
+                        } else {
+                            Label(title, systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                        }
+                        if let warning = receipt.warning {
+                            Text(warning).foregroundStyle(.orange)
+                        }
+                    } else {
+                        Button {
+                            Task { await store.openIssue(for: scenario, environment: DeviceEnvironment.summary, using: reporter) }
+                        } label: {
+                            if store.openingIssues.contains(scenario.id) {
+                                ProgressView().controlSize(.mini)
+                            } else {
+                                Label(L("Open ticket (%@)", reporter.name), systemImage: "ticket")
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red)
+                        .disabled(store.openingIssues.contains(scenario.id))
+                    }
+                    if let error = run?.issueError {
+                        Text(error).foregroundStyle(.red)
+                    }
+                }
+                HStack(spacing: 6) {
+                    Button {
+                        UIPasteboard.general.string = report.text
+                        copied = true
+                    } label: {
+                        Label(copied ? L("Copied") : L("Bug report"), systemImage: copied ? "checkmark" : "ladybug")
+                    }
+                    ShareLink(item: report.text) {
+                        Label(L("Share"), systemImage: "square.and.arrow.up")
+                    }
+                }
+                .buttonStyle(.bordered)
+            }
+            .font(.caption)
         }
     }
 }

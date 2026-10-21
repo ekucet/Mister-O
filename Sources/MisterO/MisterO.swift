@@ -34,9 +34,10 @@ public enum MisterO {
     ///   - assistantModel: Asistanın dil modeli. Verilmezse iOS 26+'da Apple'ın cihaz içi modeli kullanılır;
     ///     daha eski sistemlerde Asistan sekmesi nedenini açıklar.
     ///   - testData: Asistanın bilmesi gereken test verileri (staging test hesabı gibi). Örnek:
-    ///     `["Test hesabı e-postası": "qa@firma.com", "Test hesabı şifresi": "…"]`. Asistan bunları sormaz.
-    ///   - issueReporter: Asistanın bulduğu sorunları takip aracınızda kayda çevirir (örn. `WebhookIssueReporter`).
-    ///     Sorunun ekran görüntüsü kayda eklenir.
+    ///     `["Test hesabı e-postası": "qa@firma.com", "Test hesabı şifresi": "…"]`. Asistan bunları sormaz;
+    ///     akışlar ve katalog da `{{Test hesabı şifresi}}` diye kullanır, şifre JSON'a yazılmaz.
+    ///   - issueReporter: Asistanın bulduğu sorunları ve düşen senaryoları takip aracınızda kayda çevirir
+    ///     (örn. `WebhookIssueReporter`). Sorunun ekran görüntüsü kayda eklenir.
     ///   - language: Panelin, raporların ve asistanın dili. Verilmezse cihazın dili (desteklenmiyorsa İngilizce).
     ///   - enablesSwiftUIAccessibility: SwiftUI öğelerini bulabilmek için uygulama erişilebilirliğini
     ///     açar (private API, ayrıntı `AccessibilityBootstrap`'ta). Yalnızca UIKit ekranlarınız varsa `false` verin.
@@ -61,7 +62,10 @@ public enum MisterO {
 
         let driver = UIKitDriver()
         let runner = InAppTestRunner(driver: driver, configuration: configuration)
-        let store = ScenarioStore(feed: feed, runner: runner, resetApp: resetApp)
+        // Akışlar ve katalog `{{Test hesabı şifresi}}` gibi yer tutucularla test verisine başvurabilir.
+        runner.variables = testData
+        let store = ScenarioStore(feed: feed, runner: runner, resetApp: resetApp,
+                                  screenshot: { [weak scene] in scene.flatMap(ScreenCapture.png(in:)) })
         let assistant = makeAssistant(model: assistantModel, driver: driver, scene: scene, resetApp: resetApp,
                                       testData: testData)
         let panel = PanelModel()

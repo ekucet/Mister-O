@@ -30,6 +30,11 @@ public final class ScenarioStore: ObservableObject {
         public let steps: [StepResult]
         public let parseIssues: [FlowParseError.Issue]
         public let elapsed: Duration?
+        /// Senaryo düştüğü andaki ekranın PNG'si; hata kaydına `screenshot.png` olarak eklenir.
+        public internal(set) var screenshot: Data?
+        /// Bu koşu için takip aracında açılan kayıt.
+        public internal(set) var issueReceipt: IssueReceipt?
+        public internal(set) var issueError: String?
 
         /// Listede gösterilecek ilk hata.
         public var failureMessage: String? {
@@ -59,6 +64,8 @@ public final class ScenarioStore: ObservableObject {
     @Published public private(set) var suite: Suite?
     /// Şu an hazırlanan ya da koşan senaryo.
     @Published public private(set) var activeScenarioID: Scenario.ID?
+    /// Kaydı açılmakta olan senaryolar (buton tekrar basılmasın).
+    @Published public private(set) var openingIssues: Set<Scenario.ID> = []
     /// `start` / `startSuite` ile başlatılmış bir iş sürüyor (senaryolar arası reset dahil).
     @Published private var hasTask = false
 
@@ -68,6 +75,7 @@ public final class ScenarioStore: ObservableObject {
     private let settleTime: Duration
     private let cache: ScenarioCache?
     private let draftsDefaults: UserDefaults?
+    private let captureScreenshot: (@MainActor () -> Data?)?
     private static let draftsKey = "MisterO.drafts"
     private var validations: [Scenario.ID: Validation] = [:]
     private var task: Task<Void, Never>?
@@ -75,13 +83,15 @@ public final class ScenarioStore: ObservableObject {
     /// - Parameters:
     ///   - resetApp: Uygulamayı senaryoların başladığı duruma getirir (navigasyonu köke al, oturumu kapat…).
     ///   - settleTime: Reset sonrası ekranın oturması için beklenen süre.
+    ///   - screenshot: O anki ekranın PNG'si; düşen senaryoda alınır ve hata kaydına eklenir.
     public init(
         feed: ScenarioFeed?,
         runner: InAppTestRunner,
         resetApp: (@MainActor () async -> Void)? = nil,
         settleTime: Duration = .milliseconds(600),
         cacheDirectory: URL? = ScenarioCache.defaultDirectory,
-        draftsDefaults: UserDefaults? = .standard
+        draftsDefaults: UserDefaults? = .standard,
+        screenshot: (@MainActor () -> Data?)? = nil
     ) {
         self.feed = feed
         self.runner = runner
@@ -89,10 +99,11 @@ public final class ScenarioStore: ObservableObject {
         self.settleTime = settleTime
         self.cache = cacheDirectory.map(ScenarioCache.init(directory:))
         self.draftsDefaults = draftsDefaults
+        self.captureScreenshot = screenshot
         if let data = draftsDefaults?.data(forKey: Self.draftsKey),
            let stored = try? JSONDecoder().decode([Scenario].self, from: data) {
             drafts = stored
-            for draft in stored { validations[draft.id] = Self.validate(draft) }
+            for draft in stored { validations[draft.id] = validate(draft) }
         }
     }
 
@@ -113,7 +124,7 @@ public final class ScenarioStore: ObservableObject {
     }
 
     public func validation(for scenario: Scenario) -> Validation {
-        validations[scenario.id] ?? Self.validate(scenario)
+        validations[scenario.id] ?? validate(scenario)
     }
 
     // MARK: - Katalog
@@ -139,7 +150,7 @@ public final class ScenarioStore: ObservableObject {
     }
 
     private func apply(_ loaded: [Scenario]) {
-        for scenario in loaded { validations[scenario.id] = Self.validate(scenario) }
+        for scenario in loaded { validations[scenario.id] = validate(scenario) }
         scenarios = loaded
     }
 
@@ -147,7 +158,7 @@ public final class ScenarioStore: ObservableObject {
 
     /// Taslak kaydeder; aynı id'li taslak varsa günceller.
     public func saveDraft(_ scenario: Scenario) {
-        validations[scenario.id] = Self.validate(scenario)
+        validations[scenario.id] = validate(scenario)
         if let index = drafts.firstIndex(where: { $0.id == scenario.id }) {
             drafts[index] = scenario
         } else {
@@ -188,9 +199,11 @@ public final class ScenarioStore: ObservableObject {
         draftsDefaults.set(data, forKey: Self.draftsKey)
     }
 
-    private static func validate(_ scenario: Scenario) -> Validation {
+    /// Runner'ın değişkenleriyle (`testData`) doğrular: `{{ad}}` bilinmiyorsa senaryo hatalı görünür.
+    private func validate(_ scenario: Scenario) -> Validation {
         do {
-            return Validation(stepCount: try FlowParser().parse(scenario.script).count, issues: [])
+            return Validation(stepCount: try FlowParser(variables: runner.variables).parse(scenario.script).count,
+                              issues: [])
         } catch {
             return Validation(stepCount: 0, issues: error.issues)
         }
@@ -223,8 +236,9 @@ public final class ScenarioStore: ObservableObject {
             try? await Task.sleep(for: settleTime)
         }
         let state = await runner.run(scenario.script)
+        // Ekran görüntüsü hemen alınır: suite'te sıradaki senaryonun reset'i ekranı değiştirir.
         runs[scenario.id] = Run(state: state, steps: runner.results, parseIssues: runner.parseIssues,
-                                elapsed: runner.elapsed)
+                                elapsed: runner.elapsed, screenshot: state == .failed ? captureScreenshot?() : nil)
         return state
     }
 
@@ -260,6 +274,43 @@ public final class ScenarioStore: ObservableObject {
             await operation()
             task = nil
             hasTask = false
+        }
+    }
+
+    // MARK: - Hata kaydı
+
+    /// Düşen senaryonun hata kaydı: koşan adımlar (düşenin yanında nedeni), beklenen (senaryonun `goal`'ü),
+    /// gerçekleşen ve ekran görüntüsü. Senaryo düşmediyse `nil`.
+    public func bugReport(for scenario: Scenario, environment: String) -> BugReport? {
+        guard let run = runs[scenario.id], run.state == .failed || run.state == .invalidScript else { return nil }
+        let steps = run.steps.compactMap { result -> String? in
+            switch result.status {
+            case .passed: result.step.source
+            case .failed(let message): "\(result.step.source)  ← \(message)"
+            case .pending, .running, .skipped: nil
+            }
+        }
+        let attachments = run.screenshot.map {
+            [BugReport.Attachment(filename: "screenshot.png", mimeType: "image/png", data: $0)]
+        } ?? []
+        return BugReport(title: L("%@: scenario failed", scenario.name), steps: steps,
+                         expected: scenario.goal ?? scenario.summary ?? L("Every step of the scenario should pass."),
+                         actual: run.failureMessage ?? run.state.title, environment: environment,
+                         attachments: attachments)
+    }
+
+    /// Düşen senaryoyu takip aracında kayda çevirir; aynı koşu için bir kez açılır.
+    public func openIssue(for scenario: Scenario, environment: String, using reporter: any IssueReporter) async {
+        guard runs[scenario.id]?.issueReceipt == nil, !openingIssues.contains(scenario.id),
+              let report = bugReport(for: scenario, environment: environment) else { return }
+        openingIssues.insert(scenario.id)
+        defer { openingIssues.remove(scenario.id) }
+        do {
+            let receipt = try await reporter.open(report)
+            runs[scenario.id]?.issueReceipt = receipt
+            runs[scenario.id]?.issueError = nil
+        } catch {
+            runs[scenario.id]?.issueError = error.localizedDescription
         }
     }
 
