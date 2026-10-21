@@ -29,6 +29,7 @@ struct AppleModelIntegrationTests {
         _ = try AppleFlowAssistantModel.planSchema()
         _ = try AppleFlowAssistantModel.decisionSchema(targets: ["-", "email_field", "login_button"])
         _ = try AppleFlowAssistantModel.decisionSchema(targets: ["-"])
+        #expect(AssistantAction.allCases.contains(.scroll) && AssistantAction.allCases.contains(.back))
     }
 
     @Test func decodesPlanAndDecision() throws {
@@ -45,6 +46,19 @@ struct AppleModelIntegrationTests {
         """))
         #expect(decision == AssistantDecision(action: .assertDisabled, target: "login_button", text: "",
                                               message: "Butonu kontrol ediyorum."))
+
+        let scroll = try AppleFlowAssistantModel.decodeDecision(GeneratedContent(json: """
+        {"message": "Gönder butonu aşağıda olabilir.", "action": "scroll", "target": "-", "text": "down"}
+        """))
+        #expect(scroll == AssistantDecision(action: .scroll, target: "-", text: "down",
+                                            message: "Gönder butonu aşağıda olabilir."))
+        #expect(FlowAssistant.line(for: scroll, allowedTargets: ["-"]) == "scroll: down")
+
+        let back = try AppleFlowAssistantModel.decodeDecision(GeneratedContent(json: """
+        {"message": "Sayfayı kapatıyorum.", "action": "back", "target": "-", "text": ""}
+        """))
+        #expect(back.action == .back)
+        #expect(FlowAssistant.line(for: back, allowedTargets: ["-"]) == "back")
 
         #expect(throws: AssistantModelError.self) {
             try AppleFlowAssistantModel.decodeDecision(GeneratedContent(json: """

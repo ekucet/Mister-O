@@ -107,9 +107,9 @@ public struct AppleFlowAssistantModel: FlowAssistantModel {
                 .init(name: "message", description: "Short \(MisterOLanguage.current.promptName) reason; the question for ask; the result for pass, issue or blocked.",
                       schema: DynamicGenerationSchema(type: String.self)),
                 .init(name: "action", schema: DynamicGenerationSchema(name: "Action", anyOf: AssistantAction.allCases.map(\.rawValue))),
-                .init(name: "target", description: "Element copied from the screen list, or - for ask, pass, issue and blocked.",
+                .init(name: "target", description: "Element copied from the screen list, or - for scroll, back, ask, pass, issue and blocked.",
                       schema: DynamicGenerationSchema(name: "Target", anyOf: targets)),
-                .init(name: "text", description: "Text to type for the type action, otherwise empty.",
+                .init(name: "text", description: "Text to type for the type action, down or up for scroll, otherwise empty.",
                       schema: DynamicGenerationSchema(type: String.self)),
             ]
         )

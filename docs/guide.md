@@ -497,8 +497,12 @@ Without an `issueReporter`, testers still have **Bug report** and **Share**.
 ### How it stays reliable with a small model
 
 - **Choices only from the screen:** guided generation limits the action to `tap`, `type`, the four
-  `assert…` commands, `ask`, `pass`, `issue` and `blocked`, and the target to elements that are on
-  screen right now. The model can't invent identifiers or write invalid lines.
+  `assert…` commands, `scroll`, `back`, `ask`, `pass`, `issue` and `blocked`, and the target to
+  elements that are on screen right now. The model can't invent identifiers or write invalid lines.
+- **It scrolls for what it can't see:** the list holds only what is on screen, so when the element it
+  needs isn't there (a submit button below a long form) the model scrolls down or up and looks again.
+  A scroll that shows nothing new counts as a failed step, so the model doesn't keep scrolling past
+  the end. `back` goes back one screen or closes a sheet.
 - **It sees state:** each element comes with its kind, whether it is disabled and, for text fields,
   its current value.
 - **One step at a time:** every turn starts a fresh session with a short summary, so the small context

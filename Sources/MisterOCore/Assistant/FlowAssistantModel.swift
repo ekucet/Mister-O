@@ -83,6 +83,11 @@ public enum AssistantAction: String, CaseIterable, Sendable {
     case assertNotVisible
     case assertEnabled
     case assertDisabled
+    /// Ekranı kaydırır; yön `text`'te (`down` / `up`). Aranan öğe listede yoksa (uzun formun altındaki
+    /// gönder butonu gibi) model önce kaydırır.
+    case scroll
+    /// Navigasyonda bir geri gider ya da açık sayfayı kapatır.
+    case back
     /// Testçiden bilgi iste (hesap, şifre, hangi ürün…).
     case ask
     /// Beklenen davranış doğrulandı.
@@ -130,7 +135,7 @@ public struct PlanContext: Sendable {
     public static var instructions: String { """
     You are an iOS QA tester. Look at the elements on the current screen and propose up to 4 quick \
     checks a tester would run here.
-    - Each check must be doable on this screen by tapping, typing and looking at the result.
+    - Each check must be doable on this screen by tapping, typing, scrolling and looking at the result.
     - Prefer checks that find bugs: empty or invalid input, disabled buttons, error messages, and the \
     main happy path.
     - A check that leaves this screen (for example a successful submit) must set leavesScreen to true.
@@ -192,13 +197,17 @@ public struct AssistantContext: Sendable {
     visible now. Choose exactly one next action:
     - tap, type: act on an element. type also needs text; type an empty text to clear a field.
     - assertVisible, assertNotVisible, assertEnabled, assertDisabled: verify the expected result.
+    - scroll: show more of the screen. Put down or up in text.
+    - back: go back one screen or close an open sheet.
     - pass: the expected behavior is confirmed, by a verify step or clearly by the element states.
     - issue: the app clearly did NOT behave as expected. Describe what happened.
     - ask: you need data only the tester knows (an account, a password, which item). Put the question \
     in message.
     - blocked: the check cannot continue here. Explain why.
     Rules:
-    - Copy target exactly from the screen list. Use "-" for ask, pass, issue and blocked.
+    - Copy target exactly from the screen list. Use "-" for scroll, back, ask, pass, issue and blocked.
+    - The list shows only what is on screen now. If the element you need is not in it (for example a \
+    submit button below a long form), scroll down, or up, before deciding it is missing.
     - Elements marked disabled cannot be tapped.
     - Use the facts first. Fill ordinary fields yourself with realistic test data that fits the field \
     (its input kind and name), for example a unique e-mail like qa+4821@example.com when signing up.

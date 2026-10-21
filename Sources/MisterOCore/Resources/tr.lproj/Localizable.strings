@@ -108,6 +108,7 @@
 "No scrollable area around %@" = "%@ çevresinde kaydırılabilir alan yok";
 "No scrollable area on screen" = "Ekranda kaydırılabilir alan yok";
 "Not on screen: %@" = "Ekranda bulunamadı: %@";
+"Nothing new appeared; the end of the scrollable area was reached." = "Yeni bir şey görünmedi; kaydırılabilir alanın sonuna gelindi.";
 "Nothing to go back from: no previous screen or open sheet" = "Geri gidilecek yer yok: önceki ekran ya da açık bir sayfa yok";
 "Offline · cache from %@" = "Çevrimdışı · %@ önbelleği";
 "Open in editor" = "Editöre al";
