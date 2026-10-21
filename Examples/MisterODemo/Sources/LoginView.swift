@@ -37,6 +37,7 @@ struct WelcomeView: View {
                 .font(.title3)
                 .accessibilityIdentifier("welcome_label")
             NavigationLink("UIKit Ekranı", value: Route.uikit)
+            NavigationLink("Ayarlar", value: Route.settings)
         }
         .navigationTitle("Ana Sayfa")
     }
