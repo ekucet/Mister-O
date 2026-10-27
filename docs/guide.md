@@ -15,14 +15,14 @@ The SDK uses a private API to see SwiftUI elements (see [SwiftUI support](#swift
 so it must never ship in an App Store build.
 
 **Xcode:** *File → Add Package Dependencies…* → `https://github.com/ekucet/Mister-O.git` → set
-*Dependency Rule* to *Up to Next Major Version* from `0.4.0` → add the `MisterO` library to your
+*Dependency Rule* to *Up to Next Major Version* from `0.5.0` → add the `MisterO` library to your
 staging target only.
 
 **Package.swift:**
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/ekucet/Mister-O.git", from: "0.4.0"),
+    .package(url: "https://github.com/ekucet/Mister-O.git", from: "0.5.0"),
 ],
 targets: [
     .target(name: "MyAppStaging", dependencies: [
@@ -51,7 +51,7 @@ Mister-O:
 packages:
   MisterO:
     url: https://github.com/ekucet/Mister-O.git
-    from: 0.4.0
+    from: 0.5.0
 
 targetTemplates:
   App:
@@ -296,6 +296,124 @@ signing out:
 
 After the reset, Mister-O waits 0.6 s for the screen to settle. If you don't provide `resetApp`,
 order the catalog so that each scenario continues from where the previous one ended.
+
+## Automatic runs
+
+Scenarios can run without anyone opening the panel: when the app starts, on every pull request in CI,
+or whenever QA switches it on in the catalog. Results go to the console, to files, to Slack, and failed
+scenarios become tickets, without opening the same ticket twice.
+
+### Starting a run
+
+There are three ways to start one; the first one found wins:
+
+| Where | Example | Use it for |
+|---|---|---|
+| Launch argument or environment variable | `-MisterOAutorun "#smoke"` · `MISTERO_AUTORUN=#smoke` | CI, an Xcode scheme |
+| `autorun:` when installing | `.misterOTestPanel(autorun: .tags("smoke"))` | every launch of a QA build |
+| `"autorun"` in the catalog | `{ "autorun": "#smoke", "scenarios": [ … ] }` | QA turns it on and off from GitHub, without a new build |
+
+The selection is `all`, `#tag` or scenario IDs, separated by commas: `"#smoke, checkout-paypal"`. In the
+catalog it can also be an object: `{ "tags": ["smoke"], "ids": ["checkout-paypal"] }`. Mister-O waits for
+the catalog and gives the first screen a second, then runs the selection as a suite; the bubble shows the
+progress as in a manual run.
+
+| Variable | Argument | Effect |
+|---|---|---|
+| `MISTERO_EXIT=1` | `-MisterOExit YES` | Close the app once the run is reported. Exit code 1 if a scenario failed, 2 if nothing matched |
+| `MISTERO_TICKETS=0` | | Don't open tickets for this run |
+
+### Results
+
+Every suite, automatic or **Run all**, produces a report:
+
+- **Console:** between `MISTERO-RESULT-BEGIN` and `MISTERO-RESULT-END`.
+- **Files** in the app's `Documents/MisterO/results`: `junit.xml`, `report.json`, `summary.md` and
+  `summary.txt`.
+- **`resultReporters`:** where else to send it.
+
+```swift
+.misterOTestPanel(
+    resultReporters: [SlackResultReporter(webhookURL: URL(string: "https://hooks.slack.com/services/…")!)]
+)
+```
+
+```
+Mister-O · 4/5 passed · 19.66 s · autorun · #smoke
+iPhone (Simulator) · iOS 27.0 · app.mistero.demo 1.0 (1)
+✗ Campaign banner — Line 1: Not on screen: "campaign_banner" (waited 5.00 s) → ticket: QA-71 https://…/QA-71
+```
+
+`SlackResultReporter` posts that text to a Slack incoming webhook; Mattermost and Discord's `/slack` URL
+take the same format. `onlyFailures: true` keeps it quiet while everything passes. `WebhookResultReporter`
+posts the whole report as JSON (`total`, `passed`, `failed` and `items` with each scenario's outcome,
+failure and ticket). For anything else, conform to `ResultReporter`.
+
+### Tickets without duplicates
+
+In an automatic run, every failed scenario becomes a ticket through your `issueReporter`, the same one the
+panel uses, and the report links to it. A failure that is already reported doesn't open a second ticket:
+
+- Each failure has a **fingerprint**: the scenario's ID and the step that failed. Language and timing don't
+  change it.
+- `JiraIssueReporter` labels tickets `mistero` and `mistero-<fingerprint>` and first looks for an open one
+  with that label. If someone closes it and the failure comes back, a new ticket is opened.
+- `WebhookIssueReporter` sends `fingerprint` in the body, so your automation can look it up. In Jira
+  Automation, add a *Lookup issues* action with `labels = mistero-{{webhookData.fingerprint}}` before
+  *Create issue*. The device also remembers for 7 days which ticket it opened for each fingerprint.
+
+Tapping **Open ticket** in the panel goes through the same check and says *Already reported: QA-42* when
+the ticket exists.
+
+### In CI (GitHub Actions)
+
+Build the staging app for the simulator and give it to the action in this repository:
+
+```yaml
+jobs:
+  ui-scenarios:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build the staging app
+        run: |
+          xcodebuild build -project MyApp.xcodeproj -scheme MyAppStaging \
+            -destination "generic/platform=iOS Simulator" -derivedDataPath build
+      - name: Mister-O scenarios
+        uses: ekucet/Mister-O/ci@0.5.0
+        with:
+          app: build/Build/Products/Debug-iphonesimulator/MyAppStaging.app
+          scenarios: "#smoke"
+          env: |
+            SLACK_WEBHOOK=${{ secrets.SLACK_WEBHOOK }}
+```
+
+The action picks the newest iPhone simulator, installs the app and starts it with `MISTERO_AUTORUN` and
+`MISTERO_EXIT`. Then it copies the result files and the console log to `mistero-results/`, adds the
+table to the job summary and fails the job if a scenario failed.
+
+| Input | Default | Meaning |
+|---|---|---|
+| `app` | required | The staging app built for the simulator |
+| `scenarios` | `all` | `all`, `#tag` or IDs |
+| `bundle-id` | from the app | |
+| `device` | newest iPhone | Simulator UDID or name |
+| `timeout` | `900` | Seconds before the app is stopped |
+| `results` | `mistero-results` | Folder for the results |
+| `open-tickets` | `true` | Open tickets for failures through the app's `issueReporter` |
+| `env` | | Extra environment variables for the app, one `KEY=VALUE` per line |
+
+Outputs: `total`, `passed`, `failed`, `results`. Variables in `env` reach the app as environment variables;
+read them where you install the panel, for example
+`ProcessInfo.processInfo.environment["SLACK_WEBHOOK"]`. Keep `results` with `actions/upload-artifact` if you
+want the files. The same script runs locally:
+
+```bash
+INPUT_APP=build/Build/Products/Debug-iphonesimulator/MyAppStaging.app INPUT_SCENARIOS="#smoke" ci/run.sh
+```
+
+This repository's own CI runs the demo's `#smoke` scenarios this way. The assistant can't run in CI yet:
+Apple's model doesn't work on the simulator.
 
 ## AI test assistant
 
@@ -602,6 +720,8 @@ language changes.
     assistantModel: nil,                             // nil = Apple on-device model on iOS 26+
     testData: ["Test e-mail": "qa@acme.com"],        // data the assistant can't make up
     issueReporter: WebhookIssueReporter(url: hook),  // "Open ticket" on issues
+    autorun: .tags("smoke"),                         // run on launch (see Automatic runs)
+    resultReporters: [SlackResultReporter(webhookURL: slack)], // where suite results go
     language: nil,                                   // nil = device language; or .english, .turkish
     configuration: .init(
         elementTimeout: .seconds(8),                 // wait per element (default 5 s)
@@ -614,7 +734,7 @@ language changes.
 )
 ```
 
-`MisterO.install(in:initialScript:scenarios:resetApp:assistantModel:testData:issueReporter:language:configuration:enablesSwiftUIAccessibility:)`
+`MisterO.install(in:initialScript:scenarios:resetApp:assistantModel:testData:issueReporter:autorun:resultReporters:language:configuration:enablesSwiftUIAccessibility:)`
 takes the same parameters. `MisterO.uninstall()` removes the panel and restores the accessibility setting.
 
 ### Language
@@ -670,7 +790,9 @@ MisterOCore  (Foundation only, unit-tested on macOS)
 ├── FlowAssistant       plans checks for the screen, runs them, reports, continues with the tester
 ├── FlowAssistantModel  protocol for the language model behind the assistant
 ├── AppleFlowAssistantModel  Apple on-device model with guided generation (iOS 26+)
-└── IssueReporter       turns a found issue into a ticket (WebhookIssueReporter, JiraIssueReporter)
+├── IssueReporter       turns a found issue into a ticket (WebhookIssueReporter, JiraIssueReporter)
+├── SuiteAutomation     autorun, result files, ResultReporters, tickets without duplicates
+└── SuiteReport         one suite's result as text, JUnit XML, JSON and Markdown
 
 MisterO  (UIKit + SwiftUI)
 ├── UIKitDriver         UIDriver = ViewResolver + ActionExecutor
@@ -768,11 +890,12 @@ own webhook:
 open Examples/MisterODemo/MisterODemo.xcodeproj
 ```
 
-For a smoke run without touching the screen, set `MISTERO_AUTORUN` to scenario IDs. The demo runs them
-on launch and prints the report to the console:
+For a run without touching the screen, use [automatic runs](#automatic-runs). `MISTERO_RESULTS_WEBHOOK`
+sends the demo's results to a Slack webhook:
 
 ```bash
-SIMCTL_CHILD_MISTERO_AUTORUN=login-success,delete-account xcrun simctl launch --console booted app.mistero.demo
+SIMCTL_CHILD_MISTERO_AUTORUN="#smoke" SIMCTL_CHILD_MISTERO_EXIT=1 \
+  xcrun simctl launch --console booted app.mistero.demo
 ```
 
 The panel follows the simulator's language. To see the other one, add `-AppleLanguages (tr)` or

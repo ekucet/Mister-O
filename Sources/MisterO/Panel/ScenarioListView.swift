@@ -380,7 +380,9 @@ private struct ScenarioIssueActions: View {
                 }
                 if let reporter {
                     if let receipt = run?.issueReceipt {
-                        let title = receipt.key.map { L("Ticket opened: %@", $0) } ?? L("Ticket opened")
+                        let reference = receipt.key ?? receipt.url?.absoluteString
+                        let existing = receipt.isExisting ? reference.map { L("Already reported: %@", $0) } : nil
+                        let title = existing ?? receipt.key.map { L("Ticket opened: %@", $0) } ?? L("Ticket opened")
                         if let url = receipt.url {
                             Link(destination: url) { Label(title, systemImage: "arrow.up.right.square") }
                         } else {

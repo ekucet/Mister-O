@@ -23,15 +23,26 @@ public struct BugReport: Equatable, Codable, Sendable {
     public let actual: String
     public let environment: String
     public let attachments: [Attachment]
+    /// Aynı hatanın sabit kimliği (senaryo + düşen adım). Doluysa aynı hata ikinci kez kayıt açmaz;
+    /// Jira'da `mistero-<parmak izi>` etiketi olur, webhook gövdesinde `fingerprint` alanıdır.
+    public let fingerprint: String?
 
     public init(title: String, steps: [String], expected: String, actual: String, environment: String,
-                attachments: [Attachment] = []) {
+                attachments: [Attachment] = [], fingerprint: String? = nil) {
         self.title = title
         self.steps = steps
         self.expected = expected
         self.actual = actual
         self.environment = environment
         self.attachments = attachments
+        self.fingerprint = fingerprint
+    }
+
+    /// Dile ve süreye bağlı olmayan parmak izi: aynı senaryo aynı adımda düştükçe aynıdır.
+    public static func fingerprint(_ parts: String...) -> String {
+        let hash = parts.joined(separator: "\u{1F}").utf8
+            .reduce(UInt64(0xcbf29ce484222325)) { ($0 ^ UInt64($1)) &* 0x100000001b3 }
+        return String(hash, radix: 16)
     }
 
     /// Jira, Slack ya da e-postaya yapıştırılacak düz metin.
@@ -59,7 +70,8 @@ extension BugReport {
                   expected: try container.decode(String.self, forKey: .expected),
                   actual: try container.decode(String.self, forKey: .actual),
                   environment: try container.decode(String.self, forKey: .environment),
-                  attachments: try container.decodeIfPresent([Attachment].self, forKey: .attachments) ?? [])
+                  attachments: try container.decodeIfPresent([Attachment].self, forKey: .attachments) ?? [],
+                  fingerprint: try container.decodeIfPresent(String.self, forKey: .fingerprint))
     }
 }
 
@@ -69,11 +81,14 @@ public struct IssueReceipt: Equatable, Sendable {
     public let url: URL?
     /// Kayıt açıldı ama bir şey eksik kaldı ("Ekran görüntüsü eklenemedi: …"); panelde kaydın altında görünür.
     public let warning: String?
+    /// Yeni kayıt açılmadı: aynı hata için açık bir kayıt zaten vardı.
+    public let isExisting: Bool
 
-    public init(key: String?, url: URL?, warning: String? = nil) {
+    public init(key: String?, url: URL?, warning: String? = nil, isExisting: Bool = false) {
         self.key = key
         self.url = url
         self.warning = warning
+        self.isExisting = isExisting
     }
 }
 
@@ -88,7 +103,8 @@ public protocol IssueReporter: Sendable {
 /// Kaydı bir webhook'a JSON olarak gönderir. Jira Automation'ın "Incoming webhook" tetikleyicisi, Zapier,
 /// Make ya da kendi sunucunuz bu JSON'dan kaydı açar; staging uygulamasına Jira API token'ı koymanız gerekmez.
 ///
-/// Gövde: `{ "title", "steps": [..], "expected", "actual", "environment", "description", "attachments": [..] }`.
+/// Gövde: `{ "title", "steps": [..], "expected", "actual", "environment", "description", "attachments": [..],
+/// "fingerprint" }`. `fingerprint` aynı hata için aynıdır; sunucu onunla açık kaydı bulup yenisini açmayabilir.
 /// `attachments` elemanları `{ "filename", "mimeType", "data" }`, `data` base64'tür.
 /// Cevap JSON'unda `key` ve `url` (ya da Jira'nın `self`) alanları varsa panelde gösterilir.
 public struct WebhookIssueReporter: IssueReporter {
@@ -119,6 +135,7 @@ public struct WebhookIssueReporter: IssueReporter {
             let environment: String
             let description: String
             let attachments: [BugReport.Attachment]
+            let fingerprint: String?
         }
         var request = URLRequest(url: url, timeoutInterval: 30)
         request.httpMethod = "POST"
@@ -129,7 +146,7 @@ public struct WebhookIssueReporter: IssueReporter {
         request.httpBody = try JSONEncoder().encode(Payload(
             title: report.title, steps: report.steps, expected: report.expected, actual: report.actual,
             environment: report.environment, description: report.text,
-            attachments: includesAttachments ? report.attachments : []
+            attachments: includesAttachments ? report.attachments : [], fingerprint: report.fingerprint
         ))
         return request
     }

@@ -25,6 +25,8 @@ public enum MisterO {
     public private(set) static var scenarios: ScenarioStore?
     /// Ekranı kendi başına test eden asistan.
     public private(set) static var assistant: FlowAssistant?
+    /// Autorun ve suite raporları.
+    public private(set) static var automation: SuiteAutomation?
     private static var overlay: OverlayWindow?
 
     /// - Parameters:
@@ -37,7 +39,10 @@ public enum MisterO {
     ///     `["Test hesabı e-postası": "qa@firma.com", "Test hesabı şifresi": "…"]`. Asistan bunları sormaz;
     ///     akışlar ve katalog da `{{Test hesabı şifresi}}` diye kullanır, şifre JSON'a yazılmaz.
     ///   - issueReporter: Asistanın bulduğu sorunları ve düşen senaryoları takip aracınızda kayda çevirir
-    ///     (örn. `WebhookIssueReporter`). Sorunun ekran görüntüsü kayda eklenir.
+    ///     (örn. `WebhookIssueReporter`). Sorunun ekran görüntüsü kayda eklenir. Aynı hata ikinci kez kayıt açmaz.
+    ///   - autorun: Uygulama açılınca kendiliğinden koşacak senaryolar (`.tags("smoke")`). Başlatma argümanı ya da
+    ///     `MISTERO_AUTORUN` ortam değişkeni bunu ezer; ikisi de yoksa katalogdaki `"autorun"` alanı kullanılır.
+    ///   - resultReporters: Her suite bitince sonucu gönderir (örn. `SlackResultReporter`).
     ///   - language: Panelin, raporların ve asistanın dili. Verilmezse cihazın dili (desteklenmiyorsa İngilizce).
     ///   - enablesSwiftUIAccessibility: SwiftUI öğelerini bulabilmek için uygulama erişilebilirliğini
     ///     açar (private API, ayrıntı `AccessibilityBootstrap`'ta). Yalnızca UIKit ekranlarınız varsa `false` verin.
@@ -49,11 +54,17 @@ public enum MisterO {
         assistantModel: (any FlowAssistantModel)? = nil,
         testData: [String: String] = [:],
         issueReporter: (any IssueReporter)? = nil,
+        autorun: Autorun? = nil,
+        resultReporters: [any ResultReporter] = [],
         language: MisterOLanguage? = nil,
         configuration: InAppTestRunner.Configuration = .default,
         enablesSwiftUIAccessibility: Bool = true
     ) {
         guard overlay == nil else { return }
+        // Panel, asistan ve autorun aynı sarmalayıcıdan geçer: aynı hata için ikinci kayıt açılmaz.
+        let issueReporter = issueReporter.map {
+            $0 is DeduplicatingIssueReporter ? $0 : DeduplicatingIssueReporter($0) as any IssueReporter
+        }
         // Önce dil: aşağıda oluşan her metin (başlangıç akışı, asistanın durumu) bu dilde olur.
         MisterOLanguage.current = language ?? .device
         if enablesSwiftUIAccessibility {
@@ -85,13 +96,31 @@ public enum MisterO {
         window.rootViewController = host
         window.isHidden = false
 
+        let automation = SuiteAutomation(
+            store: store, issueReporter: issueReporter, resultReporters: resultReporters,
+            environment: { DeviceEnvironment.summary },
+            exit: { code in
+                // Arka plana geçmeden kapanıyoruz; erişilebilirlik ayarını burada geri al.
+                AccessibilityBootstrap.uninstall()
+                Foundation.exit(code)
+            }
+        )
+
         self.runner = runner
         self.scenarios = store
         self.assistant = assistant
+        self.automation = automation
         self.overlay = window
 
-        if feed != nil {
-            Task { await store.refresh() }
+        let launchAutorun = Autorun.fromLaunch()
+        Task {
+            if feed != nil {
+                await store.refresh()
+            }
+            guard let autorun = launchAutorun ?? autorun ?? store.catalogAutorun.map({ Autorun($0) }) else { return }
+            // İlk ekran yerine otursun (açılış animasyonu, yükleme).
+            try? await Task.sleep(for: .seconds(1))
+            await automation.run(autorun)
         }
     }
 
@@ -105,6 +134,7 @@ public enum MisterO {
         runner = nil
         scenarios = nil
         assistant = nil
+        automation = nil
     }
 
     private static func makeAssistant(
@@ -161,6 +191,8 @@ public extension View {
         assistantModel: (any FlowAssistantModel)? = nil,
         testData: [String: String] = [:],
         issueReporter: (any IssueReporter)? = nil,
+        autorun: Autorun? = nil,
+        resultReporters: [any ResultReporter] = [],
         language: MisterOLanguage? = nil,
         configuration: InAppTestRunner.Configuration = .default,
         enablesSwiftUIAccessibility: Bool = true
@@ -168,7 +200,8 @@ public extension View {
         background(SceneHook { scene in
             MisterO.install(in: scene, initialScript: initialScript, scenarios: scenarios, resetApp: resetApp,
                             assistantModel: assistantModel, testData: testData, issueReporter: issueReporter,
-                            language: language, configuration: configuration, enablesSwiftUIAccessibility: enablesSwiftUIAccessibility)
+                            autorun: autorun, resultReporters: resultReporters, language: language,
+                            configuration: configuration, enablesSwiftUIAccessibility: enablesSwiftUIAccessibility)
         })
     }
 }

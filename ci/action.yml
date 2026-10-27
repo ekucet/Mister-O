@@ -1,0 +1,62 @@
+name: Mister-O scenarios
+description: Runs Mister-O scenarios inside your staging app on an iOS simulator and reports the results.
+author: ekucet
+branding:
+  icon: check-circle
+  color: purple
+
+inputs:
+  app:
+    description: Path to the staging app built for the iOS simulator (.app).
+    required: true
+  scenarios:
+    description: 'Which scenarios to run: "all", "#smoke", "login-success,#auth".'
+    default: all
+  bundle-id:
+    description: The app's bundle ID. Read from the app's Info.plist when empty.
+    default: ""
+  device:
+    description: Simulator UDID or name. When empty, the first iPhone on the newest iOS runtime.
+    default: ""
+  timeout:
+    description: Seconds before the app is stopped.
+    default: "900"
+  results:
+    description: Folder for junit.xml, report.json, summary.md and the console log.
+    default: mistero-results
+  open-tickets:
+    description: Open tickets for failed scenarios through the app's issueReporter ("true" or "false").
+    default: "true"
+  env:
+    description: Extra environment variables for the app, one KEY=VALUE per line.
+    default: ""
+
+outputs:
+  total:
+    description: Number of scenarios that ran.
+    value: ${{ steps.run.outputs.total }}
+  passed:
+    description: Number of scenarios that passed.
+    value: ${{ steps.run.outputs.passed }}
+  failed:
+    description: Number of scenarios that failed.
+    value: ${{ steps.run.outputs.failed }}
+  results:
+    description: Folder with the result files.
+    value: ${{ steps.run.outputs.results }}
+
+runs:
+  using: composite
+  steps:
+    - id: run
+      shell: bash
+      run: '"$GITHUB_ACTION_PATH/run.sh"'
+      env:
+        INPUT_APP: ${{ inputs.app }}
+        INPUT_SCENARIOS: ${{ inputs.scenarios }}
+        INPUT_BUNDLE_ID: ${{ inputs.bundle-id }}
+        INPUT_DEVICE: ${{ inputs.device }}
+        INPUT_TIMEOUT: ${{ inputs.timeout }}
+        INPUT_RESULTS: ${{ inputs.results }}
+        INPUT_OPEN_TICKETS: ${{ inputs.open-tickets }}
+        INPUT_ENV: ${{ inputs.env }}

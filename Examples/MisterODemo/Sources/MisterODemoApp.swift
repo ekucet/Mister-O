@@ -20,9 +20,10 @@ struct MisterODemoApp: App {
                     assistantModel: DemoFlow.assistantModel,
                     // Asistan staging test hesabını bilsin; geçerli giriş için sormasın.
                     testData: ["Test hesabı e-postası": "tester@mistero.app", "Test hesabı şifresi": "123456"],
-                    issueReporter: DemoFlow.issueReporter
+                    issueReporter: DemoFlow.issueReporter,
+                    // Autorun: `MISTERO_AUTORUN=#smoke` (ya da `-MisterOAutorun "#smoke"`) ile açılışta koşar.
+                    resultReporters: DemoFlow.resultReporters
                 )
-                .task { await DemoFlow.autorun() }
                 #endif
         }
     }
@@ -56,24 +57,12 @@ enum DemoFlow {
         ProcessInfo.processInfo.environment["MISTERO_ASSISTANT"] == "demo" ? DemoAssistantModel() : nil
     }
 
-    /// `MISTERO_AUTORUN=id1,id2` verilirse açılışta bu senaryolar koşar ve rapor konsola yazılır
-    /// (`xcrun simctl launch --console`). Elle dokunmadan duman testi için.
-    @MainActor static func autorun() async {
-        guard let raw = ProcessInfo.processInfo.environment["MISTERO_AUTORUN"] else { return }
-        let ids = raw.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-        while [nil, .idle, .loading].contains(MisterO.scenarios?.status) {
-            try? await Task.sleep(for: .milliseconds(200))
+    /// `MISTERO_RESULTS_WEBHOOK` verilirse her suite'in özeti bu Slack (Incoming Webhook) adresine gider.
+    static var resultReporters: [any ResultReporter] {
+        guard let raw = ProcessInfo.processInfo.environment["MISTERO_RESULTS_WEBHOOK"], let url = URL(string: raw) else {
+            return []
         }
-        guard let store = MisterO.scenarios else { return }
-        let selected = ids.compactMap { id in store.allScenarios.first { $0.id == id } }
-        await store.runSuite(selected)
-        print("MISTERO-REPORT-BEGIN\n\(store.suiteReportText)")
-        for scenario in selected {
-            for result in store.runs[scenario.id]?.steps ?? [] {
-                print("  [\(scenario.id)] \(result.status.symbol) \(result.step.source)")
-            }
-        }
-        print("MISTERO-REPORT-END")
+        return [SlackResultReporter(webhookURL: url)]
     }
 
     /// Paketteki mistero-scenarios.json; `MISTERO_SCENARIOS_URL` verilirse uzaktan yüklenir.

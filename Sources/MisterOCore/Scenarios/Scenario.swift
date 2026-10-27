@@ -96,22 +96,37 @@ extension Scenario: Codable {
     }
 }
 
-/// Katalog dosyası: `{ "scenarios": [ … ] }` ya da doğrudan `[ … ]`.
+/// Katalog dosyası: `{ "scenarios": [ … ], "autorun": "#smoke" }` ya da doğrudan `[ … ]`.
 public enum ScenarioCatalog {
+    /// Senaryolar ve (varsa) açılışta kendiliğinden koşacakların seçimi.
+    public struct Document: Equatable, Sendable {
+        public var scenarios: [Scenario]
+        public var autorun: AutorunSelection?
+
+        public init(scenarios: [Scenario], autorun: AutorunSelection? = nil) {
+            self.scenarios = scenarios
+            self.autorun = autorun
+        }
+    }
+
     public static func decode(_ data: Data) throws -> [Scenario] {
+        try decodeDocument(data).scenarios
+    }
+
+    public static func decodeDocument(_ data: Data) throws -> Document {
         struct Root: Decodable {
             let scenarios: [Scenario]
+            let autorun: AutorunSelection?
         }
         let decoder = JSONDecoder()
-        let scenarios: [Scenario]
         do {
-            scenarios = try decoder.decode(Root.self, from: data).scenarios
+            let root = try decoder.decode(Root.self, from: data)
+            return Document(scenarios: uniquingIDs(root.scenarios), autorun: root.autorun)
         } catch let rootError {
             // Kök dizi biçimini de kabul et; o da olmazsa asıl (nesne) hatasını göster.
             guard let array = try? decoder.decode([Scenario].self, from: data) else { throw rootError }
-            scenarios = array
+            return Document(scenarios: uniquingIDs(array))
         }
-        return uniquingIDs(scenarios)
     }
 
     /// Aynı id'li kayıtlar sonuçların karışmaması için "-2", "-3"… ile ayrılır.

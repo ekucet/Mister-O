@@ -11,7 +11,10 @@ import Foundation
 /// 1. `POST /rest/api/3/issue`: özet, ADF açıklama (adımlar, beklenen, gerçekleşen, ortam).
 /// 2. `POST /rest/api/3/issue/{key}/attachments`: ekler tek multipart istekte. Yükleme düşerse kayıt yine
 ///    açılmış sayılır (tekrar denenince ikinci kayıt açılmasın); neden `IssueReceipt.warning`'de görünür.
-public struct JiraIssueReporter: IssueReporter {
+///
+/// Parmak izli kayıtlar `mistero` ve `mistero-<parmak izi>` etiketlerini alır. `existingIssue(fingerprint:)` bu
+/// etiketle kapanmamış kaydı arar; `DeduplicatingIssueReporter` aynı hata için yeni kayıt açmaz.
+public struct JiraIssueReporter: IssueReporter, IssueSearching {
     public let name: String
     /// `https://firma.atlassian.net`
     public let baseURL: URL
@@ -66,6 +69,7 @@ public struct JiraIssueReporter: IssueReporter {
                 let issuetype: IssueType
                 let summary: String
                 let description: ADFNode
+                let labels: [String]?
             }
             let fields: Fields
         }
@@ -76,9 +80,41 @@ public struct JiraIssueReporter: IssueReporter {
         request.setValue(authorization, forHTTPHeaderField: "Authorization")
         request.httpBody = try JSONEncoder().encode(Body(fields: .init(
             project: .init(key: projectKey), issuetype: .init(name: issueType),
-            summary: Self.summary(report.title), description: Self.description(for: report)
+            summary: Self.summary(report.title), description: Self.description(for: report),
+            labels: report.fingerprint.map { ["mistero", Self.label(for: $0)] }
         )))
         return request
+    }
+
+    /// `GET /rest/api/3/search/jql`: projede bu parmak izli, kapanmamış ilk kayıt.
+    func searchRequest(fingerprint: String) -> URLRequest {
+        var components = URLComponents(url: baseURL.appendingPathComponent("rest/api/3/search/jql"),
+                                       resolvingAgainstBaseURL: false)!
+        let jql = "project = \"\(projectKey)\" AND labels = \"\(Self.label(for: fingerprint))\" "
+            + "AND statusCategory != Done ORDER BY created DESC"
+        components.queryItems = [
+            URLQueryItem(name: "jql", value: jql),
+            URLQueryItem(name: "fields", value: "key"),
+            URLQueryItem(name: "maxResults", value: "1"),
+        ]
+        var request = URLRequest(url: components.url!, timeoutInterval: 30)
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.setValue(authorization, forHTTPHeaderField: "Authorization")
+        return request
+    }
+
+    public func existingIssue(fingerprint: String) async throws -> IssueReceipt? {
+        let data = try await send(searchRequest(fingerprint: fingerprint))
+        let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        guard let issue = (json?["issues"] as? [[String: Any]])?.first, let key = issue["key"] as? String else {
+            return nil
+        }
+        return IssueReceipt(key: key, url: baseURL.appendingPathComponent("browse").appendingPathComponent(key),
+                            isExisting: true)
+    }
+
+    static func label(for fingerprint: String) -> String {
+        "mistero-\(fingerprint)"
     }
 
     func attachmentRequest(for attachments: [BugReport.Attachment], issueKey: String,

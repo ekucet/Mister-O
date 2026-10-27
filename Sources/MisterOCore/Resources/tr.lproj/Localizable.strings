@@ -45,11 +45,15 @@
 "%ld waiting for input" = "%ld bilgi bekliyor";
 "%ld/%ld passed" = "%1$ld/%2$ld başarılı";
 "%ld/%ld steps" = "%1$ld/%2$ld adım";
+"'autorun' is empty." = "'autorun' alanı boş.";
 "(no steps)" = "(adım yok)";
 "Actual" = "Gerçekleşen";
 "Add" = "Ekle";
 "Advanced" = "Gelişmiş";
+"All scenarios passed." = "Tüm senaryolar geçti.";
 "All" = "Tümü";
+"already reported: %@" = "zaten kayıtlı: %@";
+"Already reported: %@" = "Zaten kayıtlı: %@";
 "Also try: e.g. a wrong password should show an error" = "Şunu da dene: ör. yanlış şifreyle hata çıkmalı";
 "An error should appear or %@ should stay disabled; the screen shouldn't change." = "Hata görünmeli ya da %@ pasif kalmalı; ekran değişmemeli.";
 "Apple's on-device model couldn't answer on this simulator; try a real device. (%@)" = "Apple'ın cihaz içi modeli bu simülatörde yanıt üretemedi; gerçek bir cihazda deneyin. (%@)";
@@ -68,6 +72,8 @@
 "Couldn't open the ticket: %@" = "Kayıt açılamadı: %@";
 "Couldn't plan checks: %@" = "Kontroller planlanamadı: %@";
 "Couldn't return to the start screen." = "Başlangıç ekranına dönülemedi.";
+"Couldn't send the results: %@" = "Sonuçlar gönderilemedi: %@";
+"Couldn't write the results: %@" = "Sonuçlar yazılamadı: %@";
 "Delete" = "Sil";
 "Draft" = "Taslak";
 "draft" = "taslak";
@@ -102,8 +108,10 @@
 "Missing ':'. Expected format → command: value" = "':' eksik. Beklenen biçim → komut: değer";
 "Missing value." = "Değer eksik.";
 "Mister-O assistant report · %@" = "Mister-O asistan raporu · %@";
+"Mister-O autorun skipped: another run is in progress." = "Mister-O autorun atlandı: başka bir koşu sürüyor.";
 "Mister-O test panel" = "Mister-O test paneli";
 "no reset" = "reset yok";
+"No scenario matches %@." = "%@ ile eşleşen senaryo yok.";
 "No scenarios yet. Test a screen in the Assistant tab and save the passing checks as drafts." = "Henüz senaryo yok. Asistan sekmesinde bir ekranı test edip geçen kontrolleri taslak olarak kaydedebilirsiniz.";
 "No scrollable area around %@" = "%@ çevresinde kaydırılabilir alan yok";
 "No scrollable area on screen" = "Ekranda kaydırılabilir alan yok";
@@ -123,6 +131,7 @@
 "Repair with assistant" = "Asistanla onar";
 "Repair: %@" = "Onar: %@";
 "repaired" = "onarıldı";
+"Result" = "Sonuç";
 "Run" = "Çalıştır";
 "Run #%@ (%ld)" = "#%1$@ çalıştır (%2$ld)";
 "Run all (%ld)" = "Tümünü çalıştır (%ld)";
@@ -135,6 +144,7 @@
 "Scenario %ld/%ld · %@" = "Senaryo %1$ld/%2$ld · %3$@";
 "Scenario '%@' needs 'steps' or 'flow'." = "'%@' senaryosunda 'steps' ya da 'flow' gerekli.";
 "Scenario updated" = "Senaryo güncellendi";
+"Scenario" = "Senaryo";
 "Scenarios" = "Senaryolar";
 "Screenshot of the issue" = "Sorunun ekran görüntüsü";
 "Section" = "Bölüm";
@@ -179,6 +189,8 @@
 "This device doesn't support Apple Intelligence." = "Bu cihaz Apple Intelligence'ı desteklemiyor.";
 "Ticket opened" = "Kayıt açıldı";
 "Ticket opened: %@" = "Kayıt açıldı: %@";
+"ticket: %@" = "kayıt: %@";
+"Time" = "Süre";
 "Try again" = "Tekrar dene";
 "Turn it on in Settings → Apple Intelligence." = "Ayarlar → Apple Intelligence'tan özelliği açın.";
 "Unclosed quote." = "Kapanmamış tırnak.";

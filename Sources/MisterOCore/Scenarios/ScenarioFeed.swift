@@ -13,23 +13,27 @@ public struct ScenarioFeed: Sendable {
     private let label: @Sendable () -> String
     /// Doluysa son başarılı yükleme diske yazılır ve kaynağa ulaşılamadığında kullanılır.
     public let cacheKey: String?
-    let load: @Sendable () async throws -> [Scenario]
+    let loadDocument: @Sendable () async throws -> ScenarioCatalog.Document
 
     public init(name: String, cacheKey: String? = nil, load: @escaping @Sendable () async throws -> [Scenario]) {
-        self.init(label: { name }, cacheKey: cacheKey, load: load)
+        self.init(label: { name }, cacheKey: cacheKey) { ScenarioCatalog.Document(scenarios: try await load()) }
     }
 
     private init(label: @escaping @Sendable () -> String, cacheKey: String?,
-                 load: @escaping @Sendable () async throws -> [Scenario]) {
+                 loadDocument: @escaping @Sendable () async throws -> ScenarioCatalog.Document) {
         self.label = label
         self.cacheKey = cacheKey
-        self.load = load
+        self.loadDocument = loadDocument
+    }
+
+    func load() async throws -> [Scenario] {
+        try await loadDocument().scenarios
     }
 
     /// HTTP(S) üzerinden JSON katalog. Son başarılı yükleme önbelleğe alınır.
     /// Özel bir repoda ise `headers` ile token verilebilir (yalnızca okuma yetkili bir token kullanın).
     public static func remote(_ url: URL, headers: [String: String] = [:]) -> ScenarioFeed {
-        ScenarioFeed(name: url.host() ?? url.absoluteString, cacheKey: url.absoluteString) {
+        ScenarioFeed(label: { url.host() ?? url.absoluteString }, cacheKey: url.absoluteString) {
             var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
             for (field, value) in headers {
                 request.setValue(value, forHTTPHeaderField: field)
@@ -38,22 +42,24 @@ public struct ScenarioFeed: Sendable {
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
                 throw ScenarioFeedError.httpStatus(http.statusCode)
             }
-            return try ScenarioCatalog.decode(data)
+            return try ScenarioCatalog.decodeDocument(data)
         }
     }
 
     /// Uygulama paketindeki `<resource>.json`.
     public static func bundled(_ resource: String, in bundle: Bundle = .main) -> ScenarioFeed {
         let url = bundle.url(forResource: resource, withExtension: "json")
-        return ScenarioFeed(name: "\(resource).json") {
+        return ScenarioFeed(label: { "\(resource).json" }, cacheKey: nil) {
             guard let url else { throw ScenarioFeedError.missingResource("\(resource).json") }
-            return try ScenarioCatalog.decode(Data(contentsOf: url))
+            return try ScenarioCatalog.decodeDocument(Data(contentsOf: url))
         }
     }
 
     /// Koddaki sabit liste.
     public static func inline(_ scenarios: [Scenario]) -> ScenarioFeed {
-        ScenarioFeed(label: { L("In code") }, cacheKey: nil) { ScenarioCatalog.uniquingIDs(scenarios) }
+        ScenarioFeed(label: { L("In code") }, cacheKey: nil) {
+            ScenarioCatalog.Document(scenarios: ScenarioCatalog.uniquingIDs(scenarios))
+        }
     }
 
     /// Kendi kaynağınız (Firebase Remote Config, kendi API'niz…). `cacheKey` verirseniz önbelleğe alınır.
@@ -85,6 +91,7 @@ public struct ScenarioCache: Sendable {
     struct Entry: Codable {
         let savedAt: Date
         let scenarios: [Scenario]
+        var autorun: AutorunSelection?
     }
 
     public let directory: URL
@@ -98,10 +105,11 @@ public struct ScenarioCache: Sendable {
             .appendingPathComponent("MisterO", isDirectory: true)
     }
 
-    func save(_ scenarios: [Scenario], for key: String, at date: Date = Date()) {
+    func save(_ document: ScenarioCatalog.Document, for key: String, at date: Date = Date()) {
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-            let data = try JSONEncoder().encode(Entry(savedAt: date, scenarios: scenarios))
+            let data = try JSONEncoder().encode(Entry(savedAt: date, scenarios: document.scenarios,
+                                                      autorun: document.autorun))
             try data.write(to: fileURL(for: key), options: .atomic)
         } catch {
             // Önbellek en iyi çaba; yazılamazsa yalnızca çevrimdışı yedek olmaz.
