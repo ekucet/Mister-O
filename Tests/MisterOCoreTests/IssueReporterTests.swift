@@ -220,4 +220,40 @@ struct IssueReporterTests {
         }
         #expect(await transport.requests.count == 1)
     }
+
+    // MARK: - Tekilleştirme
+
+    @Test func fingerprintGoesToTheWebhookAndBecomesAJiraLabel() throws {
+        let fingerprinted = BugReport(title: "t", steps: [], expected: "e", actual: "a", environment: "env",
+                                      fingerprint: "3fc8")
+        let webhook = try json(WebhookIssueReporter(url: URL(string: "https://example.com/hook")!)
+            .request(for: fingerprinted).httpBody)
+        #expect(webhook["fingerprint"] as? String == "3fc8")
+
+        let fields = try #require(try json(jira().issueRequest(for: fingerprinted).httpBody)["fields"] as? [String: Any])
+        #expect(fields["labels"] as? [String] == ["mistero", "mistero-3fc8"])
+        let plain = try #require(try json(jira().issueRequest(for: report).httpBody)["fields"] as? [String: Any])
+        #expect(plain["labels"] == nil)
+    }
+
+    @Test func jiraFindsTheOpenIssueByLabel() async throws {
+        let transport = FakeTransport([
+            .success(Data(#"{"issues":[{"id":"1","key":"QA-9"}],"isLast":true}"#.utf8)),
+            .success(Data(#"{"issues":[],"isLast":true}"#.utf8)),
+        ])
+        let reporter = jira(transport)
+
+        #expect(try await reporter.existingIssue(fingerprint: "3fc8")
+                == IssueReceipt(key: "QA-9", url: URL(string: "https://firma.atlassian.net/browse/QA-9"), isExisting: true))
+        #expect(try await reporter.existingIssue(fingerprint: "3fc8") == nil)
+
+        let request = try #require(await transport.requests.first)
+        let url = try #require(request.url)
+        let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        #expect(components.path == "/rest/api/3/search/jql")
+        #expect(components.queryItems?.first { $0.name == "jql" }?.value
+                == #"project = "QA" AND labels = "mistero-3fc8" AND statusCategory != Done ORDER BY created DESC"#)
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Basic abc")
+    }
+
 }

@@ -66,6 +66,10 @@ public final class ScenarioStore: ObservableObject {
     @Published public private(set) var activeScenarioID: Scenario.ID?
     /// Kaydı açılmakta olan senaryolar (buton tekrar basılmasın).
     @Published public private(set) var openingIssues: Set<Scenario.ID> = []
+    /// Katalog dosyasının `"autorun"` alanı: açılışta kendiliğinden koşacak senaryolar.
+    @Published public private(set) var catalogAutorun: AutorunSelection?
+    /// Her suite bittiğinde (elle "Tümünü çalıştır" ya da autorun) çağrılır; sonuçlar buradan raporlanır.
+    public var onSuiteFinished: (@MainActor (Suite) async -> Void)?
     /// `start` / `startSuite` ile başlatılmış bir iş sürüyor (senaryolar arası reset dahil).
     @Published private var hasTask = false
 
@@ -133,14 +137,16 @@ public final class ScenarioStore: ObservableObject {
         guard let feed, status != .loading else { return }
         status = .loading
         do {
-            let loaded = try await feed.load()
-            apply(loaded)
+            let document = try await feed.loadDocument()
+            apply(document.scenarios)
+            catalogAutorun = document.autorun
             status = .live(Date())
-            if let key = feed.cacheKey { cache?.save(loaded, for: key) }
+            if let key = feed.cacheKey { cache?.save(document, for: key) }
         } catch {
             let message = ScenarioCatalog.describe(error)
             if let key = feed.cacheKey, let entry = cache?.load(for: key) {
                 apply(entry.scenarios)
+                catalogAutorun = entry.autorun
                 status = .cached(savedAt: entry.savedAt, error: message)
             } else {
                 // Elde liste varsa (önceki yükleme) korunur, yalnızca hata gösterilir.
@@ -216,8 +222,13 @@ public final class ScenarioStore: ObservableObject {
         launch { await self.run(scenario) }
     }
 
-    /// Senaryoları sırayla arka planda koşturur.
-    public func startSuite(_ scenarios: [Scenario]) {
+    /// Suite'in başladığı an; raporların zaman damgası.
+    public private(set) var suiteStartedAt: Date?
+
+    /// Senaryoları sırayla arka planda koşturur. Dönen görev beklenirse suite bitene (raporlar dahil) kadar bekler;
+    /// başka bir iş sürüyorsa `nil`.
+    @discardableResult
+    public func startSuite(_ scenarios: [Scenario]) -> Task<Void, Never>? {
         launch { await self.runSuite(scenarios) }
     }
 
@@ -249,6 +260,7 @@ public final class ScenarioStore: ObservableObject {
             runs[scenario.id] = nil
         }
         suite = Suite(scenarios: list)
+        suiteStartedAt = Date()
 
         for (index, scenario) in list.enumerated() {
             if Task.isCancelled {
@@ -265,16 +277,22 @@ public final class ScenarioStore: ObservableObject {
         suite?.currentIndex = nil
         suite?.elapsed = clock.now - start
         suite?.isRunning = false
+        if let suite, let onSuiteFinished {
+            await onSuiteFinished(suite)
+        }
     }
 
-    private func launch(_ operation: @escaping @MainActor () async -> Void) {
-        guard task == nil, !runner.isRunning else { return }
+    @discardableResult
+    private func launch(_ operation: @escaping @MainActor () async -> Void) -> Task<Void, Never>? {
+        guard task == nil, !runner.isRunning else { return nil }
         hasTask = true
-        task = Task {
+        let task = Task {
             await operation()
-            task = nil
+            self.task = nil
             hasTask = false
         }
+        self.task = task
+        return task
     }
 
     // MARK: - Hata kaydı
@@ -293,10 +311,13 @@ public final class ScenarioStore: ObservableObject {
         let attachments = run.screenshot.map {
             [BugReport.Attachment(filename: "screenshot.png", mimeType: "image/png", data: $0)]
         } ?? []
+        // Senaryo + düşen satır: dil ve süre değişse de aynı hata aynı parmak izini verir.
+        let failedLine = run.steps.first { if case .failed = $0.status { true } else { false } }?.step.source
         return BugReport(title: L("%@: scenario failed", scenario.name), steps: steps,
                          expected: scenario.goal ?? scenario.summary ?? L("Every step of the scenario should pass."),
                          actual: run.failureMessage ?? run.state.title, environment: environment,
-                         attachments: attachments)
+                         attachments: attachments,
+                         fingerprint: BugReport.fingerprint(scenario.id, failedLine ?? String(describing: run.state)))
     }
 
     /// Düşen senaryoyu takip aracında kayda çevirir; aynı koşu için bir kez açılır.
