@@ -67,6 +67,7 @@ jobs:
           fi
           echo "Simulator: $name (iOS $os) $udid"
           echo "DESTINATION=platform=iOS Simulator,id=$udid" >> "$GITHUB_ENV"
+          echo "SIM_UDID=$udid" >> "$GITHUB_ENV"
       - name: xcodebuild test
         run: xcodebuild test -scheme MisterO -destination "$DESTINATION"
       - name: Build demo app
@@ -74,4 +75,13 @@ jobs:
           xcodebuild build \
             -project Examples/MisterODemo/MisterODemo.xcodeproj \
             -scheme MisterODemo \
-            -destination "$DESTINATION"
+            -destination "$DESTINATION" \
+            -derivedDataPath build/demo
+      # Repodaki action'ın kendisi: demo'nun #smoke senaryoları uygulamanın içinde, kimse dokunmadan koşar.
+      - name: Demo smoke scenarios
+        uses: ./ci
+        with:
+          app: build/demo/Build/Products/Debug-iphonesimulator/MisterODemo.app
+          scenarios: "#smoke"
+          device: ${{ env.SIM_UDID }}
+          open-tickets: "false"

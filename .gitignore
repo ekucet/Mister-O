@@ -4,3 +4,5 @@
 DerivedData/
 xcuserdata/
 *.xcresult
+build/
+mistero-results/
