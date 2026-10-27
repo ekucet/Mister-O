@@ -26,6 +26,8 @@ screen. No Mac, no Xcode, no `XCTest`.
   of them with one tap.
 - **AI test assistant:** tests the current screen or a check you describe, fills forms with realistic
   data, saves passing checks as scenarios and repairs broken ones.
+- **Runs by itself:** scenarios run on launch or on every pull request in CI, results go to Slack and
+  JUnit, and failures become tickets without duplicates.
 - **Tickets in one tap:** failed checks and scenarios go to Jira, Linear or GitHub Issues with the
   steps and a screenshot.
 - **SwiftUI and UIKit**, in English or Turkish.
@@ -35,7 +37,7 @@ screen. No Mac, no Xcode, no `XCTest`.
 Add the package with Swift Package Manager:
 
 ```swift
-.package(url: "https://github.com/ekucet/Mister-O.git", from: "0.4.0")
+.package(url: "https://github.com/ekucet/Mister-O.git", from: "0.5.0")
 ```
 
 Link the `MisterO` library **only to a staging target**, never to the App Store build: Mister-O uses
@@ -135,6 +137,32 @@ Your QA team writes scenarios once; testers pick them from the **Scenarios** tab
 Load it with `.remote(url)`, `.bundled("name")`, `.inline([...])` or your own source. Remote catalogs are
 cached for offline use.
 
+## Automatic runs
+
+Run scenarios without anyone touching the panel:
+
+```swift
+.misterOTestPanel(
+    scenarios: catalog,
+    autorun: .tags("smoke"),                                        // or "autorun": "#smoke" in the catalog
+    resultReporters: [SlackResultReporter(webhookURL: slackURL)]    // the summary goes to Slack
+)
+```
+
+Failed scenarios become tickets through your `issueReporter`; the same failure never opens a second one.
+Every run also writes `junit.xml` and `report.json`. In GitHub Actions, one step runs your staging app
+on a simulator and fails the job when a scenario fails:
+
+```yaml
+- uses: ekucet/Mister-O/ci@0.5.0
+  with:
+    app: build/Build/Products/Debug-iphonesimulator/MyAppStaging.app
+    scenarios: "#smoke"
+```
+
+See [automatic runs](docs/guide.md#automatic-runs) for launch arguments, the catalog switch and the CI
+inputs.
+
 ## AI test assistant
 
 On the **Assistant** tab, tap **Test this screen** or describe a check: *"Fill in the fields and tap
@@ -161,6 +189,7 @@ The [guide](docs/guide.md) covers everything else:
 [scenario catalog](docs/guide.md#scenario-catalog) ·
 [assistant](docs/guide.md#ai-test-assistant) ·
 [tickets](docs/guide.md#opening-tickets-jira-linear-github-issues) ·
+[automatic runs](docs/guide.md#automatic-runs) ·
 [configuration](docs/guide.md#configuration) ·
 [how it works](docs/guide.md#how-it-works) ·
 [private APIs](docs/guide.md#swiftui-support-and-the-private-api) ·

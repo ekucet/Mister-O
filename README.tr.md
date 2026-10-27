@@ -26,6 +26,8 @@ bir yapay zekâ asistanına test ettirir. Mac, Xcode ya da `XCTest` gerekmez.
   bir etiketi ya da hepsini tek dokunuşla koşar.
 - **Yapay zekâ test asistanı:** o anki ekranı ya da tarif ettiğiniz kontrolü test eder, formları
   gerçekçi verilerle doldurur, geçen kontrolleri senaryo olarak kaydeder, bozulanları onarır.
+- **Kendi kendine koşar:** senaryolar uygulama açılınca ya da CI'da her PR'da koşar; sonuçlar Slack'e ve
+  JUnit'e gider, düşenler tekrarsız kayda dönüşür.
 - **Tek dokunuşla kayıt:** düşen kontroller ve senaryolar adımları ve ekran görüntüsüyle Jira, Linear
   ya da GitHub Issues'a gider.
 - **SwiftUI ve UIKit**, Türkçe ya da İngilizce.
@@ -35,7 +37,7 @@ bir yapay zekâ asistanına test ettirir. Mac, Xcode ya da `XCTest` gerekmez.
 Paketi Swift Package Manager ile ekleyin:
 
 ```swift
-.package(url: "https://github.com/ekucet/Mister-O.git", from: "0.4.0")
+.package(url: "https://github.com/ekucet/Mister-O.git", from: "0.5.0")
 ```
 
 `MisterO` kütüphanesini **yalnızca bir staging target'ına** bağlayın, App Store derlemesine asla:
@@ -136,6 +138,32 @@ QA ekibiniz senaryoları bir kez yazar; testçiler **Senaryolar** sekmesinden se
 `.remote(url)`, `.bundled("ad")`, `.inline([...])` ya da kendi kaynağınızla yükleyin. Uzak kataloglar
 çevrimdışı kullanım için önbelleğe alınır.
 
+## Otomatik koşu
+
+Senaryoları kimse panele dokunmadan koşturun:
+
+```swift
+.misterOTestPanel(
+    scenarios: catalog,
+    autorun: .tags("smoke"),                                        // ya da katalogda "autorun": "#smoke"
+    resultReporters: [SlackResultReporter(webhookURL: slackURL)]    // özet Slack'e gider
+)
+```
+
+Düşen senaryolar `issueReporter`'ınızla kayda dönüşür; aynı hata ikinci kez kayıt açmaz. Her koşu
+`junit.xml` ve `report.json` da yazar. GitHub Actions'ta tek bir adım, staging uygulamanızı simülatörde
+koşar ve bir senaryo düşerse işi başarısız sayar:
+
+```yaml
+- uses: ekucet/Mister-O/ci@0.5.0
+  with:
+    app: build/Build/Products/Debug-iphonesimulator/MyAppStaging.app
+    scenarios: "#smoke"
+```
+
+Başlatma argümanları, katalog anahtarı ve CI girdileri için [otomatik koşu](docs/rehber.md#otomatik-koşu)ya
+bakın.
+
 ## Yapay zekâ test asistanı
 
 **Asistan** sekmesinde **Bu ekranı test et**'e basın ya da kontrolü tarif edin: *"Alanları doldur,
@@ -162,6 +190,7 @@ Geri kalan her şey [rehberde](docs/rehber.md):
 [senaryo kataloğu](docs/rehber.md#senaryo-kataloğu) ·
 [asistan](docs/rehber.md#yapay-zekâ-test-asistanı) ·
 [kayıt açmak](docs/rehber.md#kayıt-açmak-jira-linear-github-issues) ·
+[otomatik koşu](docs/rehber.md#otomatik-koşu) ·
 [yapılandırma](docs/rehber.md#yapılandırma) ·
 [nasıl çalışır](docs/rehber.md#nasıl-çalışır) ·
 [private API](docs/rehber.md#swiftui-desteği-ve-private-api) ·

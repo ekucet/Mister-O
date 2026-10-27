@@ -15,14 +15,14 @@ SDK, SwiftUI öğelerini görebilmek için private bir API kullanır (bkz. [Swif
 bu yüzden App Store derlemesine kesinlikle girmemelidir.
 
 **Xcode:** *File → Add Package Dependencies…* → `https://github.com/ekucet/Mister-O.git` →
-*Dependency Rule* olarak `0.4.0`'dan itibaren *Up to Next Major Version* seçin → `MisterO`
+*Dependency Rule* olarak `0.5.0`'dan itibaren *Up to Next Major Version* seçin → `MisterO`
 kütüphanesini yalnızca staging hedefine ekleyin.
 
 **Package.swift:**
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/ekucet/Mister-O.git", from: "0.4.0"),
+    .package(url: "https://github.com/ekucet/Mister-O.git", from: "0.5.0"),
 ],
 targets: [
     .target(name: "MyAppStaging", dependencies: [
@@ -51,7 +51,7 @@ target'ı ekleyin:
 packages:
   MisterO:
     url: https://github.com/ekucet/Mister-O.git
-    from: 0.4.0
+    from: 0.5.0
 
 targetTemplates:
   App:
@@ -295,6 +295,122 @@ senaryoların beklediği duruma getirmelidir; örneğin navigasyonu köke almak 
 
 Reset'ten sonra Mister-O ekranın oturması için 0,6 sn bekler. `resetApp` vermezseniz kataloğu, her
 senaryo bir öncekinin bittiği yerden devam edecek şekilde sıralayın.
+
+## Otomatik koşu
+
+Senaryolar kimse paneli açmadan koşabilir: uygulama açılınca, CI'da her PR'da ya da QA katalogdan açtığında.
+Sonuçlar konsola, dosyalara ve Slack'e gider; düşen senaryolar kayda dönüşür ve aynı kayıt ikinci kez
+açılmaz.
+
+### Koşuyu başlatmak
+
+Koşuyu başlatmanın üç yolu var; ilk bulunan geçerlidir:
+
+| Nerede | Örnek | Ne için |
+|---|---|---|
+| Başlatma argümanı ya da ortam değişkeni | `-MisterOAutorun "#smoke"` · `MISTERO_AUTORUN=#smoke` | CI, Xcode şeması |
+| Kurulumda `autorun:` | `.misterOTestPanel(autorun: .tags("smoke"))` | QA derlemesinin her açılışı |
+| Katalogda `"autorun"` | `{ "autorun": "#smoke", "scenarios": [ … ] }` | QA, yeni derleme gerekmeden GitHub'dan açıp kapatır |
+
+Seçim `all`, `#etiket` ya da virgülle ayrılmış senaryo kimlikleridir: `"#smoke, checkout-paypal"`.
+Katalogda nesne de olabilir: `{ "tags": ["smoke"], "ids": ["checkout-paypal"] }`. Mister-O kataloğu
+bekler, ilk ekrana bir saniye tanır, sonra seçimi suite olarak koşar; baloncuk ilerlemeyi elle başlatılmış
+bir koşudaki gibi gösterir.
+
+| Değişken | Argüman | Etkisi |
+|---|---|---|
+| `MISTERO_EXIT=1` | `-MisterOExit YES` | Koşu raporlanınca uygulamayı kapatır. Senaryo düştüyse çıkış kodu 1, hiçbiri eşleşmediyse 2 |
+| `MISTERO_TICKETS=0` | | Bu koşuda kayıt açılmaz |
+
+### Sonuçlar
+
+Otomatik ya da **Tümünü çalıştır** ile başlatılmış her suite bir rapor üretir:
+
+- **Konsol:** `MISTERO-RESULT-BEGIN` ile `MISTERO-RESULT-END` arasında.
+- **Dosyalar:** uygulamanın `Documents/MisterO/results` klasöründe `junit.xml`, `report.json`, `summary.md`
+  ve `summary.txt`.
+- **`resultReporters`:** raporun gönderileceği diğer yerler.
+
+```swift
+.misterOTestPanel(
+    resultReporters: [SlackResultReporter(webhookURL: URL(string: "https://hooks.slack.com/services/…")!)]
+)
+```
+
+```
+Mister-O · 4/5 passed · 19.66 s · autorun · #smoke
+iPhone (Simulator) · iOS 27.0 · app.mistero.demo 1.0 (1)
+✗ Kampanya bandı — Line 1: Not on screen: "campaign_banner" (waited 5.00 s) → ticket: QA-71 https://…/QA-71
+```
+
+`SlackResultReporter` bu metni bir Slack Incoming Webhook'una gönderir; Mattermost ve Discord'un `/slack`
+adresi de aynı biçimi kabul eder. `onlyFailures: true` her şey geçerken sessiz kalır. `WebhookResultReporter`
+raporun tamamını JSON olarak gönderir (`total`, `passed`, `failed` ve her senaryonun sonucu, hatası ve
+kaydıyla `items`). Başka bir yer için `ResultReporter`'a uyun.
+
+### Tekrarsız kayıt
+
+Otomatik koşuda düşen her senaryo, panelin de kullandığı `issueReporter` ile kayda dönüşür; rapor kayda
+bağlantı verir. Zaten kayıtlı bir hata ikinci kez kayıt açmaz:
+
+- Her hatanın bir **parmak izi** vardır: senaryonun kimliği ve düştüğü adım. Dil ve süre onu değiştirmez.
+- `JiraIssueReporter` kayıtlara `mistero` ve `mistero-<parmak izi>` etiketlerini koyar ve önce bu etiketle
+  açık bir kayıt arar. Biri kaydı kapatır da hata geri gelirse yeni kayıt açılır.
+- `WebhookIssueReporter` gövdede `fingerprint` gönderir; otomasyonunuz onunla arayabilir. Jira
+  Automation'da *Create issue*'dan önce `labels = mistero-{{webhookData.fingerprint}}` ile bir *Lookup issues*
+  eylemi ekleyin. Cihaz da her parmak izi için açtığı kaydı 7 gün hatırlar.
+
+Paneldeki **Kayıt aç** da aynı kontrolden geçer; kayıt varsa *Zaten kayıtlı: QA-42* der.
+
+### CI'da (GitHub Actions)
+
+Staging uygulamasını simülatör için derleyin ve bu repodaki action'a verin:
+
+```yaml
+jobs:
+  ui-scenarios:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+      - name: Staging uygulamasını derle
+        run: |
+          xcodebuild build -project MyApp.xcodeproj -scheme MyAppStaging \
+            -destination "generic/platform=iOS Simulator" -derivedDataPath build
+      - name: Mister-O senaryoları
+        uses: ekucet/Mister-O/ci@0.5.0
+        with:
+          app: build/Build/Products/Debug-iphonesimulator/MyAppStaging.app
+          scenarios: "#smoke"
+          env: |
+            SLACK_WEBHOOK=${{ secrets.SLACK_WEBHOOK }}
+```
+
+Action en yeni iPhone simülatörünü seçer, uygulamayı kurar ve `MISTERO_AUTORUN` ile `MISTERO_EXIT` vererek
+başlatır. Ardından sonuç dosyalarını ve konsol günlüğünü `mistero-results/`'a kopyalar, tabloyu iş
+özetine ekler ve bir senaryo düştüyse işi başarısız sayar.
+
+| Girdi | Varsayılan | Anlamı |
+|---|---|---|
+| `app` | zorunlu | Simülatör için derlenmiş staging uygulaması |
+| `scenarios` | `all` | `all`, `#etiket` ya da kimlikler |
+| `bundle-id` | uygulamadan | |
+| `device` | en yeni iPhone | Simülatör UDID'si ya da adı |
+| `timeout` | `900` | Uygulama durdurulmadan önceki saniye |
+| `results` | `mistero-results` | Sonuç klasörü |
+| `open-tickets` | `true` | Düşenler için uygulamanın `issueReporter`'ıyla kayıt aç |
+| `env` | | Uygulamaya verilecek ek ortam değişkenleri, satır başına `KEY=VALUE` |
+
+Çıktılar: `total`, `passed`, `failed`, `results`. `env`'deki değişkenler uygulamaya ortam değişkeni olarak
+ulaşır; paneli kurduğunuz yerde okuyun, örneğin `ProcessInfo.processInfo.environment["SLACK_WEBHOOK"]`.
+Dosyaları saklamak isterseniz `results` klasörünü `actions/upload-artifact` ile yükleyin. Aynı betik
+yerelde de çalışır:
+
+```bash
+INPUT_APP=build/Build/Products/Debug-iphonesimulator/MyAppStaging.app INPUT_SCENARIOS="#smoke" ci/run.sh
+```
+
+Bu reponun kendi CI'ı demo'nun `#smoke` senaryolarını bu şekilde koşar. Asistan henüz CI'da koşamıyor:
+Apple'ın modeli simülatörde çalışmıyor.
 
 ## Yapay zekâ test asistanı
 
@@ -599,6 +715,8 @@ değişince bozulur.
     assistantModel: nil,                             // nil = iOS 26+'da Apple'ın cihaz içi modeli
     testData: ["Test e-postası": "qa@acme.com"],     // asistanın uyduramayacağı veriler
     issueReporter: WebhookIssueReporter(url: hook),  // sorunlarda "Kayıt aç" butonu
+    autorun: .tags("smoke"),                         // açılışta koş (bkz. Otomatik koşu)
+    resultReporters: [SlackResultReporter(webhookURL: slack)], // suite sonuçlarının gideceği yer
     language: nil,                                   // nil = cihazın dili; ya da .turkish, .english
     configuration: .init(
         elementTimeout: .seconds(8),                 // öğe başına bekleme (varsayılan 5 sn)
@@ -611,7 +729,7 @@ değişince bozulur.
 )
 ```
 
-`MisterO.install(in:initialScript:scenarios:resetApp:assistantModel:testData:issueReporter:language:configuration:enablesSwiftUIAccessibility:)`
+`MisterO.install(in:initialScript:scenarios:resetApp:assistantModel:testData:issueReporter:autorun:resultReporters:language:configuration:enablesSwiftUIAccessibility:)`
 aynı parametreleri alır. `MisterO.uninstall()` paneli kaldırır ve erişilebilirlik ayarını eski haline döndürür.
 
 ### Dil
@@ -669,7 +787,9 @@ MisterOCore  (yalnızca Foundation, macOS'ta test edilir)
 ├── FlowAssistant       ekran için kontrol planlar, koşar, raporlar, testçiyle devam eder
 ├── FlowAssistantModel  asistanın arkasındaki dil modeli için protokol
 ├── AppleFlowAssistantModel  guided generation ile Apple'ın cihaz içi modeli (iOS 26+)
-└── IssueReporter       bulunan sorunu kayda çevirir (WebhookIssueReporter, JiraIssueReporter)
+├── IssueReporter       bulunan sorunu kayda çevirir (WebhookIssueReporter, JiraIssueReporter)
+├── SuiteAutomation     autorun, sonuç dosyaları, ResultReporter'lar, tekrarsız kayıt
+└── SuiteReport         bir suite'in sonucu: metin, JUnit XML, JSON ve Markdown
 
 MisterO  (UIKit + SwiftUI)
 ├── UIKitDriver         UIDriver = ViewResolver + ActionExecutor
@@ -765,11 +885,12 @@ denemek için `MISTERO_ASSISTANT=demo`, **Kayıt aç**'ı kendi webhook'unuzla d
 open Examples/MisterODemo/MisterODemo.xcodeproj
 ```
 
-Ekrana dokunmadan duman testi için `MISTERO_AUTORUN`'a senaryo kimliklerini verin. Demo açılışta onları
-koşar ve raporu konsola yazar:
+Ekrana dokunmadan koşu için [otomatik koşu](#otomatik-koşu)yu kullanın. `MISTERO_RESULTS_WEBHOOK`, demo'nun
+sonuçlarını bir Slack webhook'una gönderir:
 
 ```bash
-SIMCTL_CHILD_MISTERO_AUTORUN=login-success,delete-account xcrun simctl launch --console booted app.mistero.demo
+SIMCTL_CHILD_MISTERO_AUTORUN="#smoke" SIMCTL_CHILD_MISTERO_EXIT=1 \
+  xcrun simctl launch --console booted app.mistero.demo
 ```
 
 Panel simülatörün dilini izler. Diğer dili görmek için şemanın başlatma argümanlarına
